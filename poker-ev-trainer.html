@@ -1,0 +1,2323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Felt — Preflop Range Trainer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.26.0/babel.min.js"></script>
+  <style>
+    /* Base felt background so the page never flashes white before React mounts */
+    html, body, #root {
+      min-height: 100%;
+      margin: 0;
+      background: #0B241A;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel" data-presets="react">
+    const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+    /* ----------------------------------------------------------------------
+       Inline SVG icons matching lucide-react shapes (no external icon CDN).
+    ----------------------------------------------------------------------- */
+    function IconSvg({ size = 24, color = "currentColor", strokeWidth = 2, className = "", style, children }) {
+      return (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width={size}
+          height={size}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={className}
+          style={style}
+          aria-hidden="true"
+        >
+          {children}
+        </svg>
+      );
+    }
+
+    const RotateCcw = (p) => (
+      <IconSvg {...p}>
+        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+        <path d="M3 3v5h5" />
+      </IconSvg>
+    );
+    const ArrowRight = (p) => (
+      <IconSvg {...p}>
+        <path d="M5 12h14" />
+        <path d="m12 5 7 7-7 7" />
+      </IconSvg>
+    );
+    const Trophy = (p) => (
+      <IconSvg {...p}>
+        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+        <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+        <path d="M4 22h16" />
+        <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
+        <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+        <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+      </IconSvg>
+    );
+    const Check = (p) => (
+      <IconSvg {...p}>
+        <path d="M20 6 9 17l-5-5" />
+      </IconSvg>
+    );
+    const X = (p) => (
+      <IconSvg {...p}>
+        <path d="M18 6 6 18" />
+        <path d="m6 6 12 12" />
+      </IconSvg>
+    );
+    const Sparkles = (p) => (
+      <IconSvg {...p}>
+        <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.25-1.313a.5.5 0 0 1 0-.97l6.25-1.314A2 2 0 0 0 9.937 9.5l1.313-6.25a.5.5 0 0 1 .97 0l1.314 6.25a2 2 0 0 0 1.437 1.437l6.25 1.313a.5.5 0 0 1 0 .97l-6.25 1.314a2 2 0 0 0-1.437 1.437l-1.313 6.25a.5.5 0 0 1-.97 0z" />
+        <path d="M20 3v4" />
+        <path d="M22 5h-4" />
+        <path d="M4 17v2" />
+        <path d="M5 18H3" />
+      </IconSvg>
+    );
+    const SettingsIcon = (p) => (
+      <IconSvg {...p}>
+        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+        <circle cx="12" cy="12" r="3" />
+      </IconSvg>
+    );
+    const Award = (p) => (
+      <IconSvg {...p}>
+        <path d="m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526" />
+        <circle cx="12" cy="8" r="6" />
+      </IconSvg>
+    );
+    const HelpCircle = (p) => (
+      <IconSvg {...p}>
+        <circle cx="12" cy="12" r="10" />
+        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+        <path d="M12 17h.01" />
+      </IconSvg>
+    );
+
+    /* ----------------------------------------------------------------------
+       DATA: the 13x13 preflop EV chart, encoded as raise/call/fold decisions.
+       Rows/cols run A,K,Q,J,T,9,8,7,6,5,4,3,2. Values transcribed directly
+       from the uploaded chart's colour coding (green=raise, yellow=call,
+       red=fold).
+    ------------------------------------------------------------------------- */
+    const RANKS = ["A", "K", "Q", "J", "T", "9", "8", "7", "6", "5", "4", "3", "2"];
+
+    const ACTION_GRID = {
+      A: ["R","R","R","R","R","R","R","R","R","R","R","R","C"],
+      K: ["R","R","R","R","R","R","C","C","C","C","C","F","F"],
+      Q: ["R","R","R","R","R","R","C","C","C","F","F","F","F"],
+      J: ["R","R","R","R","R","R","C","C","F","F","F","F","F"],
+      T: ["R","R","C","C","R","R","C","C","F","F","F","F","F"],
+      9: ["R","C","C","F","F","R","C","C","F","F","F","F","F"],
+      8: ["C","F","F","F","F","F","R","C","F","F","F","F","F"],
+      7: ["C","F","F","F","F","F","F","R","C","F","F","F","F"],
+      6: ["F","F","F","F","F","F","F","F","R","F","F","F","F"],
+      5: ["F","F","F","F","F","F","F","F","F","C","F","F","F"],
+      4: ["F","F","F","F","F","F","F","F","F","F","C","F","F"],
+      3: ["F","F","F","F","F","F","F","F","F","F","F","C","F"],
+      2: ["F","F","F","F","F","F","F","F","F","F","F","F","C"],
+    };
+
+    const CATEGORY_LABEL = { pair: "Pairs", suited: "Suited", offsuit: "Offsuit" };
+    const ACTION_WORD = { R: "Raise", C: "Call", F: "Fold" };
+    const HISTORY_KEY = "poker-ev-history-v1";
+    const SETTINGS_KEY = "poker-ev-settings-v1";
+    const RUN_SIZE = 20;
+    const REDEMPTION_WINDOW = 10; // mistakes in hands 1-10 get a shot at redemption after the run
+
+    /* --------------------------- spaced repetition ---------------------------
+       Every hand carries an invisible "difficulty" score, persisted per hand id.
+       Wrong answers push it up, right answers pull it back down (floored at 0),
+       and it's capped so no single hand can dominate every run. Deck-building
+       then does a *weighted* random draw (no replacement) so harder hands are
+       more likely to appear without ever fully excluding the easy ones.
+    --------------------------------------------------------------------------- */
+    const DIFFICULTY_CAP = 10;
+    const DIFFICULTY_WRONG_STEP = 3;
+    const DIFFICULTY_CORRECT_STEP = 1;
+
+    /* ------------------------------- mastery ---------------------------------
+       A hand is "mastered" once it has enough attempts and a high enough
+       accuracy. Mastered hands are shown far less often (they've been learned),
+       while hands that are close but not yet across the line get a priority
+       bump, since that's where practice pays off most.
+    --------------------------------------------------------------------------- */
+    const MASTERY_MIN_ATTEMPTS = 5;
+    const MASTERY_ACCURACY = 0.8;
+    const MASTERED_WEIGHT_MULTIPLIER = 0.15; // still shows up, just rarely
+    const NEAR_MASTERY_BOOST = 1.6; // up to +160% weight the closer a hand is
+
+    function handAccuracy(stat) {
+      if (!stat || !stat.total) return null;
+      return stat.correct / stat.total;
+    }
+
+    function isMastered(stat) {
+      const acc = handAccuracy(stat);
+      return acc !== null && stat.total >= MASTERY_MIN_ATTEMPTS && acc >= MASTERY_ACCURACY;
+    }
+
+    // 0 (barely started) -> 1 (right at the mastery line), so hands closing in
+    // get bumped up in the deck without ever excluding fresher ones
+    function masteryProximity(stat) {
+      if (!stat || !stat.total || isMastered(stat)) return 0;
+      const acc = handAccuracy(stat) || 0;
+      const attemptsFactor = Math.min(stat.total / MASTERY_MIN_ATTEMPTS, 1);
+      const accFactor = Math.min(acc / MASTERY_ACCURACY, 1);
+      return attemptsFactor * accFactor;
+    }
+
+    function dedupeMasteredList(list) {
+      const seen = new Set();
+      const out = [];
+      list.forEach((m) => {
+        if (seen.has(m.id)) return;
+        seen.add(m.id);
+        out.push(m);
+      });
+      return out;
+    }
+
+    /* --------------------------- mastery pin ----------------------------------
+       The single not-yet-mastered hand closest to crossing the mastery line is
+       "pinned": it's tracked across the next couple of runs so there's always a
+       concrete, visible target to work toward instead of just a probability
+       bump. It's guaranteed a slot in exactly ONE of those two runs (picked at
+       random when the pin is created) — not force-inserted into both — though
+       its heavy mastery-proximity weight means it can easily turn up naturally
+       in the other run too. Once mastered (or its pin runs out) the next
+       closest hand takes its place.
+    --------------------------------------------------------------------------- */
+    const MASTERY_PIN_RUNS = 2;
+
+    function computeMasteryTarget(handPool, handStats) {
+      let best = null;
+      handPool.forEach((hand) => {
+        const stat = handStats ? handStats[hand.id] : null;
+        if (isMastered(stat)) return;
+        const proximity = masteryProximity(stat);
+        if (proximity <= 0) return;
+        if (!best || proximity > best.proximity) {
+          best = { id: hand.id, notation: hand.notation, category: hand.category, proximity };
+        }
+      });
+      return best;
+    }
+
+    // Decides which hand (if any) is being tracked for the run about to be
+    // built, and whether THIS run is the one that gets the guaranteed slot.
+    // Returns the pin state to persist afterward (already decremented for the
+    // run it's about to cover), with a `forceThisRun` flag the deck builder
+    // uses to decide whether to force-insert it.
+    function resolveMasteryPin(prevPin, handPool, handStats) {
+      let pin = prevPin;
+      if (pin) {
+        const stat = handStats ? handStats[pin.id] : null;
+        if (isMastered(stat) || pin.remaining <= 0) pin = null;
+      }
+      if (!pin) {
+        const target = computeMasteryTarget(handPool, handStats);
+        if (!target) return null;
+        pin = {
+          id: target.id,
+          notation: target.notation,
+          category: target.category,
+          remaining: MASTERY_PIN_RUNS,
+          // which of the next MASTERY_PIN_RUNS runs (0-indexed) gets the
+          // guaranteed slot — chosen once, at random, when the pin is created
+          forceRunIndex: Math.random() < 0.5 ? 0 : 1,
+        };
+      }
+      const runIndex = MASTERY_PIN_RUNS - pin.remaining;
+      const forceThisRun = runIndex === pin.forceRunIndex;
+      return { ...pin, remaining: pin.remaining - 1, forceThisRun };
+    }
+
+    function weightForHand(handId, difficulty, handStats) {
+      const d = Math.min((difficulty && difficulty[handId]) || 0, DIFFICULTY_CAP);
+      const stat = handStats ? handStats[handId] : null;
+      const base = 1 + d; // baseline weight of 1 keeps easy hands showing up occasionally
+
+      if (isMastered(stat)) return base * MASTERED_WEIGHT_MULTIPLIER;
+
+      const proximity = masteryProximity(stat);
+      return base * (1 + proximity * NEAR_MASTERY_BOOST);
+    }
+
+    function weightedSampleWithoutReplacement(items, weightFn, n) {
+      // Efraimidis-Spirakis weighted reservoir sampling: each item gets a random
+      // key raised to 1/weight, and taking the top-n keys draws items with
+      // probability proportional to weight, without replacement.
+      const scored = items.map((item) => {
+        const w = Math.max(weightFn(item), 0.0001);
+        const key = Math.pow(Math.random(), 1 / w);
+        return { item, key };
+      });
+      scored.sort((a, b) => b.key - a.key);
+      return scored.slice(0, n).map((s) => s.item);
+    }
+
+    function buildDeck(pool, difficulty, handStats, pin) {
+      let picks = weightedSampleWithoutReplacement(
+        pool,
+        (h) => weightForHand(h.id, difficulty || {}, handStats || {}),
+        RUN_SIZE
+      );
+      if (pin && pin.forceThisRun && !picks.some((h) => h.id === pin.id)) {
+        const pinnedHand = pool.find((h) => h.id === pin.id);
+        if (pinnedHand) {
+          const replaceIdx = Math.floor(Math.random() * picks.length);
+          picks = picks.slice();
+          picks[replaceIdx] = pinnedHand;
+        }
+      }
+      return picks.map((h) => ({ ...h, suits: assignSuits(h.category) }));
+    }
+
+    function buildHandPool() {
+      const pool = [];
+      for (let i = 0; i < RANKS.length; i++) {
+        for (let j = 0; j < RANKS.length; j++) {
+          const r1 = RANKS[i];
+          const r2 = RANKS[j];
+          const action = ACTION_GRID[r1][j];
+          let category, notation;
+          if (i === j) {
+            category = "pair";
+            notation = r1 + r1;
+          } else if (i < j) {
+            category = "suited";
+            notation = r1 + r2 + "s";
+          } else {
+            category = "offsuit";
+            notation = r2 + r1;
+          }
+          pool.push({ id: `${i}-${j}`, notation, category, action });
+        }
+      }
+      return pool;
+    }
+
+    function shuffled(arr) {
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    const SUITS = ["\u2660", "\u2665", "\u2666", "\u2663"];
+    function assignSuits(category) {
+      if (category === "suited") {
+        const s = SUITS[Math.floor(Math.random() * 4)];
+        return [s, s];
+      }
+      const a = Math.floor(Math.random() * 4);
+      let b = Math.floor(Math.random() * 4);
+      while (b === a) b = Math.floor(Math.random() * 4);
+      return [SUITS[a], SUITS[b]];
+    }
+
+    function emptyCatTotals() {
+      return {
+        pair: { correct: 0, total: 0 },
+        suited: { correct: 0, total: 0 },
+        offsuit: { correct: 0, total: 0 },
+      };
+    }
+
+    function defaultHistory() {
+      return { runs: [], aggregate: emptyCatTotals(), difficulty: {}, handStats: {}, flawlessRuns: 0, pinnedMastery: null };
+    }
+
+    function defaultSettings() {
+      return { autoAdvance: false, animationSpeed: "quick" };
+    }
+
+    // Base (1x = "Relaxed") animation timings in ms; other presets scale these down
+    // so the deal/feedback/advance pacing all speed up together.
+    const BASE_DURATIONS = { deal: 240, shake: 420, sparkle: 700, tick: 520, advance: 900, mastery: 1700, flawless: 1500 };
+    const SPEED_PRESETS = {
+      relaxed: { label: "Relaxed", blurb: "Original pacing", factor: 1 },
+      quick: { label: "Quick", blurb: "Faster transitions", factor: 0.55 },
+      instant: { label: "Instant", blurb: "Minimal delay, snap to next hand", factor: 0.25 },
+    };
+
+    function durationsForSpeed(speedKey) {
+      const factor = (SPEED_PRESETS[speedKey] || SPEED_PRESETS.quick).factor;
+      // The mastery celebration is rare and worth savoring, so it ignores most of
+      // the speed-up: even on "Instant" it still plays at 75% of relaxed pace.
+      const masteryFactor = Math.max(factor, 0.75);
+      return {
+        deal: Math.round(BASE_DURATIONS.deal * factor),
+        shake: Math.round(BASE_DURATIONS.shake * factor),
+        sparkle: Math.round(BASE_DURATIONS.sparkle * factor),
+        tick: Math.round(BASE_DURATIONS.tick * factor),
+        advance: Math.max(150, Math.round(BASE_DURATIONS.advance * factor)),
+        mastery: Math.round(BASE_DURATIONS.mastery * masteryFactor),
+        flawless: Math.round(BASE_DURATIONS.flawless * factor),
+      };
+    }
+
+    function summarizeLog(log) {
+      const cats = emptyCatTotals();
+      let correct = 0;
+      log.forEach((a) => {
+        cats[a.category].total += 1;
+        if (a.correct) {
+          cats[a.category].correct += 1;
+          correct += 1;
+        }
+      });
+      return { correct, total: log.length, cats };
+    }
+
+    function addCats(a, b) {
+      const out = emptyCatTotals();
+      ["pair", "suited", "offsuit"].forEach((k) => {
+        out[k].correct = a[k].correct + b[k].correct;
+        out[k].total = a[k].total + b[k].total;
+      });
+      return out;
+    }
+
+    function pct(correct, total) {
+      if (!total) return null;
+      return Math.round((correct / total) * 100);
+    }
+
+    /* Storage: use localStorage (standard browser) in place of window.storage */
+    const hasStorage = typeof window !== "undefined" && !!window.localStorage;
+
+    async function loadHistory() {
+      if (!hasStorage) return defaultHistory();
+      try {
+        const raw = window.localStorage.getItem(HISTORY_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          // merge so older saved histories (pre-difficulty/handStats/flawlessRuns/
+          // pinnedMastery tracking) still work
+          return {
+            ...defaultHistory(),
+            ...parsed,
+            difficulty: parsed.difficulty || {},
+            handStats: parsed.handStats || {},
+            flawlessRuns: parsed.flawlessRuns || 0,
+            pinnedMastery: parsed.pinnedMastery || null,
+          };
+        }
+        return defaultHistory();
+      } catch (e) {
+        return defaultHistory();
+      }
+    }
+
+    async function saveHistory(data) {
+      if (!hasStorage) return;
+      try {
+        window.localStorage.setItem(HISTORY_KEY, JSON.stringify(data));
+      } catch (e) {
+        // best-effort; ignore failures
+      }
+    }
+
+    async function loadSettings() {
+      if (!hasStorage) return defaultSettings();
+      try {
+        const raw = window.localStorage.getItem(SETTINGS_KEY);
+        if (raw) return { ...defaultSettings(), ...JSON.parse(raw) };
+        return defaultSettings();
+      } catch (e) {
+        return defaultSettings();
+      }
+    }
+
+    async function saveSettings(data) {
+      if (!hasStorage) return;
+      try {
+        window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(data));
+      } catch (e) {
+        // best-effort; ignore failures
+      }
+    }
+
+    /* ------------------------------- palette -------------------------------- */
+    const FELT = "#123527";
+    const FELT_DEEP = "#0B241A";
+    const RAIL = "#5C3A22";
+    const CREAM = "#F6EFDD";
+    const INK = "#20241F";
+    const GOLD = "#CFA84B";
+    const RAISE_BG = "#2E8B63";
+    const CALL_BG = "#D7A73B";
+    const CALL_TEXT = "#2A2005";
+    const FOLD_BG = "#B8463B";
+    const MUTED_CREAM = "rgba(246,239,221,0.62)";
+    const MASTERED_PURPLE = "#8B6FD1";
+    const LAVENDER = "#C9AEF2";
+    const REDEMPTION_ACCENT = "#4FB6C7";
+
+    /* ------------------------------ subcomponents ---------------------------- */
+
+    function TabButton({ active, onClick, children }) {
+      return (
+        <button
+          onClick={onClick}
+          className="px-4 py-2 rounded-full text-sm font-medium transition"
+          style={{
+            background: active ? CREAM : "rgba(246,239,221,0.12)",
+            color: active ? INK : CREAM,
+          }}
+        >
+          {children}
+        </button>
+      );
+    }
+
+    function ToggleSwitch({ checked, onChange, label }) {
+      return (
+        <button
+          type="button"
+          role="switch"
+          aria-checked={checked}
+          onClick={() => onChange(!checked)}
+          className="flex items-center gap-2 select-none"
+        >
+          {label && (
+            <span className="text-xs" style={{ color: MUTED_CREAM }}>
+              {label}
+            </span>
+          )}
+          <span
+            className="relative inline-flex items-center rounded-full transition-colors"
+            style={{
+              width: 34,
+              height: 18,
+              background: checked ? GOLD : "rgba(246,239,221,0.2)",
+            }}
+          >
+            <span
+              className="absolute rounded-full transition-transform"
+              style={{
+                width: 14,
+                height: 14,
+                top: 2,
+                left: 2,
+                background: CREAM,
+                transform: checked ? "translateX(16px)" : "translateX(0)",
+              }}
+            />
+          </span>
+        </button>
+      );
+    }
+
+    function MiniCard({ rank, suit, delay, large }) {
+      const isRed = suit === "\u2665" || suit === "\u2666";
+      return (
+        <div
+          className="rounded-lg shadow-lg flex flex-col items-center justify-center select-none"
+          style={{
+            width: large ? "8.5rem" : "5.5rem",
+            height: large ? "11.5rem" : "7.5rem",
+            background: CREAM,
+            border: `2px solid rgba(32,36,31,0.15)`,
+            color: isRed ? "#A5342A" : INK,
+            transform: `rotate(${delay}deg)`,
+          }}
+        >
+          <span className={large ? "text-5xl font-semibold leading-none" : "text-3xl font-semibold leading-none"}>
+            {rank}
+          </span>
+          <span className={large ? "text-4xl leading-none mt-2" : "text-2xl leading-none mt-1"}>{suit}</span>
+        </div>
+      );
+    }
+
+    function ChipButton({ label, sublabel, bg, textColor, onClick, disabled, state }) {
+      // state: null | 'chosen' | 'correct-hint' | 'dim'
+      let ring = "0 2px 6px rgba(0,0,0,0.35)";
+      let opacity = 1;
+      if (state === "chosen") ring = `0 0 0 3px ${CREAM}, 0 2px 8px rgba(0,0,0,0.4)`;
+      if (state === "correct-hint") ring = `0 0 0 3px #ffffff, 0 2px 8px rgba(0,0,0,0.4)`;
+      if (state === "dim") opacity = 0.45;
+
+      return (
+        <button
+          onClick={onClick}
+          disabled={disabled}
+          className="flex-1 rounded-2xl py-4 flex flex-col items-center justify-center transition disabled:cursor-default"
+          style={{ background: bg, color: textColor, boxShadow: ring, opacity }}
+        >
+          <span className="text-base font-semibold">{label}</span>
+          {sublabel && <span className="text-[11px] mt-0.5 opacity-80">{sublabel}</span>}
+        </button>
+      );
+    }
+
+    function ProgressBar({ value, max }) {
+      return (
+        <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(246,239,221,0.15)" }}>
+          <div
+            className="h-full rounded-full transition-all"
+            style={{ width: `${(value / max) * 100}%`, background: GOLD }}
+          />
+        </div>
+      );
+    }
+
+    function CategoryTable({ overall, last }) {
+      const order = ["pair", "suited", "offsuit"];
+      return (
+        <div className="rounded-xl overflow-hidden" style={{ background: "rgba(246,239,221,0.06)" }}>
+          <div
+            className="grid grid-cols-3 text-xs px-4 py-2"
+            style={{ color: MUTED_CREAM, borderBottom: "1px solid rgba(246,239,221,0.12)" }}
+          >
+            <span>Category</span>
+            <span className="text-right">Overall</span>
+            <span className="text-right">Last run</span>
+          </div>
+          {order.map((k) => {
+            const o = overall[k];
+            const l = last ? last[k] : null;
+            const op = pct(o.correct, o.total);
+            const lp = l ? pct(l.correct, l.total) : null;
+            return (
+              <div
+                key={k}
+                className="grid grid-cols-3 items-center px-4 py-2.5 text-sm"
+                style={{ color: CREAM, borderBottom: "1px solid rgba(246,239,221,0.06)" }}
+              >
+                <span>{CATEGORY_LABEL[k]}</span>
+                <span className="text-right" style={{ color: op === null ? MUTED_CREAM : CREAM }}>
+                  {op === null ? "—" : `${op}% (${o.correct}/${o.total})`}
+                </span>
+                <span className="text-right" style={{ color: lp === null ? MUTED_CREAM : GOLD }}>
+                  {lp === null ? "—" : `${lp}% (${l.correct}/${l.total})`}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    /* ------------------------- accuracy heatmap + trend ----------------------- */
+
+    function hexToRgb(hex) {
+      const h = hex.replace("#", "");
+      const n = parseInt(h, 16);
+      return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    }
+
+    function lerpColor(hexA, hexB, t) {
+      const a = hexToRgb(hexA);
+      const b = hexToRgb(hexB);
+      const c = a.map((v, i) => Math.round(v + (b[i] - v) * t));
+      return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+    }
+
+    // red (0% correct) -> gold (50%) -> green (100%), matching the fold/call/raise
+    // palette — except a mastered hand always shows solid purple, regardless of
+    // its raw percentage, so mastered cards read as visually "done" at a glance.
+    function colorForAccuracy(acc, mastered) {
+      if (mastered) return MASTERED_PURPLE;
+      if (acc === null) return "rgba(246,239,221,0.12)";
+      if (acc < 0.5) return lerpColor(FOLD_BG, CALL_BG, acc / 0.5);
+      return lerpColor(CALL_BG, RAISE_BG, (acc - 0.5) / 0.5);
+    }
+
+    // Deterministic "random" in [0,1) from an integer seed — every mastered cell
+    // gets its own stable-but-scattered timing so the polychrome effect never
+    // looks synchronized, without the values jumping around on every re-render.
+    function seededRandom(seed) {
+      const x = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
+      return x - Math.floor(x);
+    }
+
+    // Per-cell holo variables inspired by Balatro's polychrome foil: each card
+    // gets its own spin speed, sheen speed, delay, and starting hue so the
+    // shimmer feels alive and slightly chaotic rather than one uniform sweep.
+    function holoVars(seed) {
+      const r1 = seededRandom(seed);
+      const r2 = seededRandom(seed + 101);
+      const r3 = seededRandom(seed + 202);
+      const r4 = seededRandom(seed + 303);
+      const r5 = seededRandom(seed + 404);
+      return {
+        "--holo-delay": `${(r1 * 3.2).toFixed(2)}s`,
+        "--holo-sheen-dur": `${(2.6 + r2 * 2.6).toFixed(2)}s`,
+        "--holo-spin-dur": `${(4 + r3 * 7).toFixed(2)}s`,
+        "--holo-spin-dir": r4 > 0.5 ? "1" : "-1",
+        "--holo-hue": `${Math.round(r5 * 360)}deg`,
+      };
+    }
+
+    function AccuracyHeatmap({ handStats, onSelectHand }) {
+      // Pure inline styles throughout: this grid relies on precise column widths,
+      // gaps, and an explicit aspect ratio, which can silently fail to render if
+      // the host page doesn't compile Tailwind's arbitrary-value utilities
+      // (e.g. gap-[2px], aspect-square). Inline styles always apply.
+      return (
+        <div style={{ overflowX: "auto" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: `22px repeat(13, minmax(20px, 1fr))`,
+              gap: 3,
+              minWidth: 400,
+            }}
+          >
+            <div />
+            {RANKS.map((r) => (
+              <div
+                key={`col-${r}`}
+                style={{ textAlign: "center", fontSize: 9, paddingBottom: 4, color: MUTED_CREAM }}
+              >
+                {r}
+              </div>
+            ))}
+            {RANKS.map((r1, i) => (
+              <React.Fragment key={`row-${r1}`}>
+                <div
+                  style={{
+                    fontSize: 9,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: MUTED_CREAM,
+                  }}
+                >
+                  {r1}
+                </div>
+                {RANKS.map((r2, j) => {
+                  const id = `${i}-${j}`;
+                  const stat = handStats[id];
+                  const acc = stat && stat.total ? stat.correct / stat.total : null;
+                  const mastered = isMastered(stat);
+                  let category, notation;
+                  if (i === j) {
+                    category = "pair";
+                    notation = r1 + r1;
+                  } else if (i < j) {
+                    category = "suited";
+                    notation = r1 + r2 + "s";
+                  } else {
+                    category = "offsuit";
+                    notation = r2 + r1;
+                  }
+                  const action = ACTION_GRID[RANKS[i]][j];
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      title={`${notation}: ${
+                        mastered
+                          ? `Mastered (${Math.round(acc * 100)}%, ${stat.total} seen)`
+                          : acc === null
+                          ? "not seen yet — click for details"
+                          : `${Math.round(acc * 100)}% (${stat.total} seen) — click for details`
+                      }`}
+                      onClick={() =>
+                        onSelectHand && onSelectHand({ id, notation, category, action, stat: stat || null, mastered })
+                      }
+                      className={`heatmap-cell${mastered ? " mastered-cell" : ""}`}
+                      style={{
+                        width: "100%",
+                        aspectRatio: "1 / 1",
+                        minHeight: 16,
+                        borderRadius: 3,
+                        background: colorForAccuracy(acc, mastered),
+                        border: "1px solid rgba(0,0,0,0.18)",
+                        position: "relative",
+                        overflow: "hidden",
+                        padding: 0,
+                        cursor: "pointer",
+                        ...(mastered ? holoVars(i * 13 + j) : null),
+                      }}
+                    />
+                  );
+                })}
+              </React.Fragment>
+            ))}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: 10, color: MUTED_CREAM }}>
+            <span>0%</span>
+            <div
+              style={{
+                height: 8,
+                flex: 1,
+                borderRadius: 999,
+                background: `linear-gradient(to right, ${FOLD_BG}, ${CALL_BG}, ${RAISE_BG})`,
+              }}
+            />
+            <span>100%</span>
+            <span
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: 2,
+                marginLeft: 12,
+                background: MASTERED_PURPLE,
+                display: "inline-block",
+              }}
+            />
+            <span>mastered</span>
+            <span
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: 2,
+                marginLeft: 12,
+                background: "rgba(246,239,221,0.12)",
+                border: "1px solid rgba(246,239,221,0.25)",
+                display: "inline-block",
+              }}
+            />
+            <span>no data</span>
+          </div>
+        </div>
+      );
+    }
+
+    function AccuracyTrend({ runs }) {
+      const data = [...runs]
+        .slice(0, 20)
+        .reverse()
+        .map((r) => ({ pct: pct(r.correct, r.total) ?? 0, id: r.id }));
+
+      if (data.length === 0) {
+        return (
+          <p className="text-sm px-1 py-6 text-center" style={{ color: MUTED_CREAM }}>
+            Finish a few runs to see your trend.
+          </p>
+        );
+      }
+
+      const W = 320;
+      const H = 120;
+      const PAD_L = 26;
+      const PAD_R = 8;
+      const PAD_T = 10;
+      const PAD_B = 8;
+      const innerW = W - PAD_L - PAD_R;
+      const innerH = H - PAD_T - PAD_B;
+      const stepX = data.length > 1 ? innerW / (data.length - 1) : 0;
+      const xFor = (i) => PAD_L + i * stepX;
+      const yFor = (p) => PAD_T + innerH - (p / 100) * innerH;
+      const points = data.map((d, i) => `${xFor(i)},${yFor(d.pct)}`).join(" ");
+      const latest = data[data.length - 1];
+
+      return (
+        <div className="rounded-xl p-3" style={{ background: "rgba(246,239,221,0.06)" }}>
+          <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none">
+            {[0, 25, 50, 75, 100].map((g) => (
+              <g key={g}>
+                <line
+                  x1={PAD_L}
+                  x2={W - PAD_R}
+                  y1={yFor(g)}
+                  y2={yFor(g)}
+                  stroke="rgba(246,239,221,0.1)"
+                  strokeWidth="1"
+                />
+                <text x={PAD_L - 5} y={yFor(g) + 3} textAnchor="end" fontSize="8" fill={MUTED_CREAM}>
+                  {g}
+                </text>
+              </g>
+            ))}
+            {data.length > 1 && (
+              <polyline points={points} fill="none" stroke={GOLD} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+            )}
+            {data.map((d, i) => (
+              <circle key={d.id} cx={xFor(i)} cy={yFor(d.pct)} r={data.length === 1 ? 3.5 : 2.5} fill={GOLD} />
+            ))}
+          </svg>
+          <div className="flex justify-between mt-1 text-[10px]" style={{ color: MUTED_CREAM }}>
+            <span>{data.length > 1 ? `Last ${data.length} runs` : "First run"}</span>
+            <span style={{ color: GOLD }}>{latest.pct}% most recent</span>
+          </div>
+        </div>
+      );
+    }
+
+    /* ------------------------- hand inspector modal ---------------------------
+       Opened from a heatmap tile: blows the hand up large on a blank backdrop
+       alongside the correct answer and its full track record, so the tile a
+       person is curious (or worried) about gets a proper close look.
+    --------------------------------------------------------------------------- */
+    const ACTION_BG = { R: RAISE_BG, C: CALL_BG, F: FOLD_BG };
+    const ACTION_TEXT = { R: CREAM, C: CALL_TEXT, F: CREAM };
+
+    function HandInspectorModal({ hand, onClose }) {
+      useEffect(() => {
+        const onKey = (e) => {
+          if (e.key === "Escape") onClose();
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+      }, [onClose]);
+
+      if (!hand) return null;
+      const { notation, category, action, stat, mastered, suits } = hand;
+      const total = stat ? stat.total : 0;
+      const correct = stat ? stat.correct : 0;
+      const incorrect = total - correct;
+      const accPct = total ? Math.round((correct / total) * 100) : null;
+      const incorrectPct = total ? Math.round((incorrect / total) * 100) : null;
+      const rank1 = notation.replace("s", "")[0];
+      const rank2 = notation.replace("s", "")[1];
+
+      return (
+        <div
+          className="fixed inset-0 flex items-center justify-center p-4"
+          style={{ background: "rgba(4,7,5,0.94)", zIndex: 50 }}
+          onClick={onClose}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${notation} details`}
+        >
+          <div
+            className="hand-inspector-in w-full max-w-sm rounded-3xl p-6 relative"
+            style={{ background: FELT_DEEP, border: "1px solid rgba(246,239,221,0.14)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              className="absolute top-4 right-4 rounded-full p-1.5"
+              style={{ color: MUTED_CREAM, background: "rgba(246,239,221,0.08)" }}
+            >
+              <X size={16} />
+            </button>
+
+            <div className="flex justify-center gap-4 mt-2 mb-5">
+              <MiniCard rank={rank1} suit={suits[0]} delay={-6} large />
+              <MiniCard rank={rank2} suit={suits[1]} delay={6} large />
+            </div>
+
+            <div className="text-center mb-1">
+              <p
+                className="text-3xl font-bold"
+                style={{ color: CREAM, fontFamily: "'Fraunces', serif" }}
+              >
+                {notation}
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: MUTED_CREAM }}>
+                {CATEGORY_LABEL[category]}
+              </p>
+            </div>
+
+            <div className="flex items-center justify-center gap-2 my-4">
+              <span className="text-xs" style={{ color: MUTED_CREAM }}>
+                Correct response:
+              </span>
+              <span
+                className="text-xs font-semibold px-2.5 py-1 rounded-full"
+                style={{ background: ACTION_BG[action], color: ACTION_TEXT[action] }}
+              >
+                {ACTION_WORD[action]}
+              </span>
+              {mastered && (
+                <span
+                  className="text-[10px] font-semibold px-2 py-1 rounded-full flex items-center gap-1"
+                  style={{ background: "rgba(139,111,209,0.25)", color: LAVENDER }}
+                >
+                  <Award size={10} />
+                  Mastered
+                </span>
+              )}
+            </div>
+
+            {total === 0 ? (
+              <p className="text-sm text-center py-4" style={{ color: MUTED_CREAM }}>
+                Not seen yet — this hand hasn't come up in a run.
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-2xl p-3" style={{ background: "rgba(246,239,221,0.06)" }}>
+                  <p className="text-xs mb-1" style={{ color: MUTED_CREAM }}>
+                    Correct
+                  </p>
+                  <p className="text-xl font-bold" style={{ color: "#7CD9AE", fontFamily: "'Fraunces', serif" }}>
+                    {accPct}%
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: MUTED_CREAM }}>
+                    {correct} of {total}
+                  </p>
+                </div>
+                <div className="rounded-2xl p-3" style={{ background: "rgba(246,239,221,0.06)" }}>
+                  <p className="text-xs mb-1" style={{ color: MUTED_CREAM }}>
+                    Incorrect
+                  </p>
+                  <p className="text-xl font-bold" style={{ color: "#E2897E", fontFamily: "'Fraunces', serif" }}>
+                    {incorrectPct}%
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: MUTED_CREAM }}>
+                    {incorrect} of {total}
+                  </p>
+                </div>
+                <div className="col-span-2 rounded-2xl p-3" style={{ background: "rgba(246,239,221,0.06)" }}>
+                  <p className="text-xs mb-1" style={{ color: MUTED_CREAM }}>
+                    Mastery progress
+                  </p>
+                  <p className="text-sm" style={{ color: CREAM }}>
+                    {mastered
+                      ? "Crossed the mastery line — shows up far less often now."
+                      : total < MASTERY_MIN_ATTEMPTS
+                      ? `Needs ${MASTERY_MIN_ATTEMPTS - total} more attempt${
+                          MASTERY_MIN_ATTEMPTS - total === 1 ? "" : "s"
+                        } at ${Math.round(MASTERY_ACCURACY * 100)}%+ accuracy to master.`
+                      : `At ${accPct}% accuracy — needs ${Math.round(MASTERY_ACCURACY * 100)}%+ to master.`}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    /* --------------------------------- app ----------------------------------- */
+
+    function PokerEVTrainer() {
+      const handPool = useMemo(() => buildHandPool(), []);
+      const [ready, setReady] = useState(false);
+      const [history, setHistory] = useState(defaultHistory());
+      const [activeTab, setActiveTab] = useState("quiz");
+      const [phase, setPhase] = useState("quiz"); // 'quiz' | 'redemption' | 'summary'
+      const [deck, setDeck] = useState([]);
+      const [idx, setIdx] = useState(0);
+      const [chosen, setChosen] = useState(null);
+      const [summary, setSummary] = useState(null);
+      const [resetConfirm, setResetConfirm] = useState(false);
+      const [inspectedHand, setInspectedHand] = useState(null); // { id, notation, category, action, stat, mastered, suits } | null
+      const [settings, setSettings] = useState(defaultSettings());
+      const [justMastered, setJustMastered] = useState(null); // { id, notation } | null
+      const [masteryLock, setMasteryLock] = useState(false); // true while a just-crossed mastery is still "on screen"
+      const [redemptionQueue, setRedemptionQueue] = useState([]);
+      const [redemptionIdx, setRedemptionIdx] = useState(0);
+      const [redemptionChosen, setRedemptionChosen] = useState(null);
+      const [showRedemptionHint, setShowRedemptionHint] = useState(false);
+      const runLogRef = useRef([]);
+      const redemptionLogRef = useRef([]);
+      const masteredRunRef = useRef([]); // [{id, notation}] crossed into mastery this run
+      const masteryLockTimerRef = useRef(null);
+
+      const updateSettings = useCallback((patch) => {
+        setSettings((prev) => {
+          const next = { ...prev, ...patch };
+          saveSettings(next);
+          return next;
+        });
+      }, []);
+
+      const durations = useMemo(() => durationsForSpeed(settings.animationSpeed), [settings.animationSpeed]);
+
+      // Holds "Next" back (both the button and auto-advance) for as long as the
+      // mastery celebration plays, so a quick auto-advance or an eager click
+      // can't cut the moment short before it's actually been seen.
+      const armMasteryLock = useCallback(() => {
+        setMasteryLock(true);
+        if (masteryLockTimerRef.current) clearTimeout(masteryLockTimerRef.current);
+        masteryLockTimerRef.current = setTimeout(() => {
+          setMasteryLock(false);
+        }, durations.mastery + 250);
+      }, [durations.mastery]);
+
+      useEffect(() => {
+        return () => {
+          if (masteryLockTimerRef.current) clearTimeout(masteryLockTimerRef.current);
+        };
+      }, []);
+
+      const startNewRun = useCallback(() => {
+        const pin = resolveMasteryPin(history.pinnedMastery, handPool, history.handStats);
+        const picks = buildDeck(handPool, history.difficulty, history.handStats, pin);
+        setHistory((prev) => {
+          const updated = { ...prev, pinnedMastery: pin };
+          saveHistory(updated);
+          return updated;
+        });
+        runLogRef.current = [];
+        redemptionLogRef.current = [];
+        masteredRunRef.current = [];
+        setDeck(picks);
+        setIdx(0);
+        setChosen(null);
+        setSummary(null);
+        setJustMastered(null);
+        if (masteryLockTimerRef.current) clearTimeout(masteryLockTimerRef.current);
+        setMasteryLock(false);
+        setRedemptionQueue([]);
+        setRedemptionIdx(0);
+        setRedemptionChosen(null);
+        setShowRedemptionHint(false);
+        setInspectedHand(null);
+        setPhase("quiz");
+        setActiveTab("quiz");
+      }, [handPool, history.difficulty, history.handStats, history.pinnedMastery]);
+
+      useEffect(() => {
+        let mounted = true;
+        (async () => {
+          const [h, s] = await Promise.all([loadHistory(), loadSettings()]);
+          if (!mounted) return;
+          const pin = resolveMasteryPin(h.pinnedMastery, handPool, h.handStats);
+          const hWithPin = { ...h, pinnedMastery: pin };
+          setHistory(hWithPin);
+          saveHistory(hWithPin);
+          setSettings(s);
+          runLogRef.current = [];
+          setDeck(buildDeck(handPool, hWithPin.difficulty, hWithPin.handStats, pin));
+          setIdx(0);
+          setChosen(null);
+          setPhase("quiz");
+          setReady(true);
+        })();
+        return () => {
+          mounted = false;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, []);
+
+      const currentHand = deck[idx];
+      const currentRedemption = redemptionQueue[redemptionIdx];
+
+      const handleAnswer = (action) => {
+        if (chosen || !currentHand) return;
+        const correct = action === currentHand.action;
+        runLogRef.current.push({
+          id: currentHand.id,
+          notation: currentHand.notation,
+          category: currentHand.category,
+          correctAction: currentHand.action,
+          chosen: action,
+          correct,
+        });
+        setChosen(action);
+
+        // figure out, before we touch state, whether this exact answer is the
+        // one that pushes the hand's accuracy across the mastery line for the
+        // first time — only a correct answer can do that, since a wrong one can
+        // only pull accuracy down, so this can never retrigger on an already-
+        // mastered hand's later correct answers.
+        const prevStats = history.handStats || {};
+        const prevStat = prevStats[currentHand.id];
+        const wasMastered = isMastered(prevStat);
+        const s = prevStat || { correct: 0, total: 0 };
+        const nextStat = { correct: s.correct + (correct ? 1 : 0), total: s.total + 1 };
+        const justCrossedMastery = correct && !wasMastered && isMastered(nextStat);
+
+        // adjust this hand's invisible difficulty score, and its accuracy stats,
+        // right away so future deck draws and the history tab reflect it
+        setHistory((prev) => {
+          const prevDiff = prev.difficulty || {};
+          const cur = prevDiff[currentHand.id] || 0;
+          const nextDiff = correct
+            ? Math.max(0, cur - DIFFICULTY_CORRECT_STEP)
+            : Math.min(DIFFICULTY_CAP, cur + DIFFICULTY_WRONG_STEP);
+
+          const updated = {
+            ...prev,
+            difficulty: { ...prevDiff, [currentHand.id]: nextDiff },
+            handStats: { ...(prev.handStats || {}), [currentHand.id]: nextStat },
+          };
+          saveHistory(updated);
+          return updated;
+        });
+
+        if (justCrossedMastery) {
+          setJustMastered({ id: currentHand.id, notation: currentHand.notation });
+          masteredRunRef.current.push({ id: currentHand.id, notation: currentHand.notation });
+          armMasteryLock();
+        }
+      };
+
+      const finishRun = async () => {
+        const log = runLogRef.current;
+        const s = summarizeLog(log);
+        const isFlawless = s.total > 0 && s.correct === s.total;
+        const record = {
+          id: Date.now(),
+          timestamp: new Date().toISOString(),
+          correct: s.correct,
+          total: s.total,
+          cats: s.cats,
+          flawless: isFlawless,
+          masteredHands: dedupeMasteredList(masteredRunRef.current),
+        };
+        setHistory((prev) => {
+          let nextHandStats = prev.handStats || {};
+          let nextDifficulty = prev.difficulty || {};
+
+          if (isFlawless) {
+            // A flawless run — no mistakes anywhere in it — counts as answering
+            // every hand it contained correctly a second time, giving mastery
+            // an extra push as a reward for the clean sweep.
+            nextHandStats = { ...nextHandStats };
+            nextDifficulty = { ...nextDifficulty };
+            log.forEach((a) => {
+              const st = nextHandStats[a.id] || { correct: 0, total: 0 };
+              nextHandStats[a.id] = { correct: st.correct + 1, total: st.total + 1 };
+              const d = nextDifficulty[a.id] || 0;
+              nextDifficulty[a.id] = Math.max(0, d - DIFFICULTY_CORRECT_STEP);
+            });
+          }
+
+          const updated = {
+            ...prev,
+            runs: [record, ...prev.runs].slice(0, 200),
+            aggregate: addCats(prev.aggregate, s.cats),
+            handStats: nextHandStats,
+            difficulty: nextDifficulty,
+            flawlessRuns: (prev.flawlessRuns || 0) + (isFlawless ? 1 : 0),
+          };
+          saveHistory(updated);
+          return updated;
+        });
+        setSummary(record);
+
+        // Any hand missed in the first REDEMPTION_WINDOW hands gets one shot at
+        // redemption before the summary shows. This sits outside the run itself
+        // — it never changes the score above, it only softens the mistake's
+        // effect on that hand's ongoing accuracy/difficulty if corrected.
+        const redemptionCandidates = log
+          .slice(0, REDEMPTION_WINDOW)
+          .filter((a) => !a.correct)
+          .map((a) => ({
+            id: a.id,
+            notation: a.notation,
+            category: a.category,
+            action: a.correctAction,
+            suits: assignSuits(a.category),
+          }));
+
+        if (redemptionCandidates.length > 0) {
+          redemptionLogRef.current = [];
+          setRedemptionQueue(redemptionCandidates);
+          setRedemptionIdx(0);
+          setRedemptionChosen(null);
+          setPhase("redemption");
+        } else {
+          setPhase("summary");
+        }
+      };
+
+      const handleNext = () => {
+        if (!chosen || masteryLock) return;
+        setJustMastered(null);
+        if (idx + 1 < deck.length) {
+          setIdx((i) => i + 1);
+          setChosen(null);
+        } else {
+          finishRun();
+        }
+      };
+
+      const handleRedemptionAnswer = (action) => {
+        if (redemptionChosen || !currentRedemption) return;
+        const correct = action === currentRedemption.action;
+        redemptionLogRef.current.push({ id: currentRedemption.id, notation: currentRedemption.notation, correct });
+        setRedemptionChosen(action);
+        if (!correct) return; // a second miss just leaves the original mistake as-is
+
+        // Successfully redeeming a mistake softens its impact: it earns the hand
+        // an extra correct mark (the same bonus a flawless run gives), nudging
+        // its accuracy and difficulty back the other way without erasing that
+        // the original miss happened. It can NOT, however, be the answer that
+        // carries a hand across the mastery line — mastery means you got it
+        // right for real, in the run; a redemption is a do-over on a hand you
+        // already missed, so it has no business "mastering" that same hand. If
+        // applying the usual bonus would cross that line, skip the stat bump
+        // entirely and leave the original miss exactly as it was.
+        const prevStats = history.handStats || {};
+        const prevStat = prevStats[currentRedemption.id];
+        const wasMastered = isMastered(prevStat);
+        const base = prevStat || { correct: 0, total: 0 };
+        const nextStat = { correct: base.correct + 1, total: base.total + 1 };
+        if (!wasMastered && isMastered(nextStat)) return;
+
+        setHistory((prev) => {
+          const prevDiff = prev.difficulty || {};
+          const cur = prevDiff[currentRedemption.id] || 0;
+          const nextDiff = Math.max(0, cur - DIFFICULTY_CORRECT_STEP);
+          const updated = {
+            ...prev,
+            difficulty: { ...prevDiff, [currentRedemption.id]: nextDiff },
+            handStats: { ...(prev.handStats || {}), [currentRedemption.id]: nextStat },
+          };
+          saveHistory(updated);
+          return updated;
+        });
+      };
+
+      const handleRedemptionNext = () => {
+        if (!redemptionChosen || masteryLock) return;
+        setJustMastered(null);
+        if (redemptionIdx + 1 < redemptionQueue.length) {
+          setRedemptionIdx((i) => i + 1);
+          setRedemptionChosen(null);
+        } else {
+          const redeemed = redemptionLogRef.current.filter((a) => a.correct).length;
+          setSummary((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  redemption: { attempted: redemptionQueue.length, redeemed },
+                  masteredHands: dedupeMasteredList(masteredRunRef.current),
+                }
+              : prev
+          );
+          setPhase("summary");
+        }
+      };
+
+      // keyboard shortcuts
+      useEffect(() => {
+        if (activeTab !== "quiz") return;
+        if (phase !== "quiz" && phase !== "redemption" && phase !== "summary") return;
+        const onKey = (e) => {
+          const k = e.key.toLowerCase();
+          if (phase === "quiz") {
+            if (!chosen) {
+              if (k === "r") handleAnswer("R");
+              else if (k === "c") handleAnswer("C");
+              else if (k === "f") handleAnswer("F");
+            } else if (k === "enter" || k === " " || k === "arrowright") {
+              e.preventDefault();
+              handleNext();
+            }
+          } else if (phase === "redemption") {
+            if (!redemptionChosen) {
+              if (k === "r") handleRedemptionAnswer("R");
+              else if (k === "c") handleRedemptionAnswer("C");
+              else if (k === "f") handleRedemptionAnswer("F");
+            } else if (k === "enter" || k === " " || k === "arrowright") {
+              e.preventDefault();
+              handleRedemptionNext();
+            }
+          } else if (phase === "summary") {
+            if (k === " ") {
+              e.preventDefault();
+              startNewRun();
+            }
+          }
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      });
+
+      // auto-advance: only when the toggle is on AND the answer was correct.
+      // A wrong answer always waits for a manual "Next hand" click, regardless
+      // of the toggle, so the miss has a moment to register. Delay length comes
+      // from the animation-speed setting. While a mastery celebration is locked
+      // in, this holds off entirely rather than firing early and being ignored —
+      // it re-fires once the lock clears, so the celebration is never cut short.
+      useEffect(() => {
+        if (!settings.autoAdvance || !chosen || !currentHand || masteryLock) return;
+        if (chosen !== currentHand.action) return;
+        const t = setTimeout(() => {
+          handleNext();
+        }, durations.advance);
+        return () => clearTimeout(t);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [chosen, settings.autoAdvance, durations.advance, masteryLock]);
+
+      // same auto-advance behavior, applied to the redemption round
+      useEffect(() => {
+        if (!settings.autoAdvance || !redemptionChosen || !currentRedemption || masteryLock) return;
+        if (redemptionChosen !== currentRedemption.action) return;
+        const t = setTimeout(() => {
+          handleRedemptionNext();
+        }, durations.advance);
+        return () => clearTimeout(t);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [redemptionChosen, settings.autoAdvance, durations.advance, masteryLock]);
+
+      const overallPct = pct(
+        ["pair", "suited", "offsuit"].reduce((s, k) => s + history.aggregate[k].correct, 0),
+        ["pair", "suited", "offsuit"].reduce((s, k) => s + history.aggregate[k].total, 0)
+      );
+      const lastRun = history.runs[0] || null;
+      const lastRunPct = lastRun ? pct(lastRun.correct, lastRun.total) : null;
+
+      const nextClosestMastery = useMemo(() => {
+        const stats = history.handStats || {};
+        let best = null;
+        Object.keys(stats).forEach((id) => {
+          const stat = stats[id];
+          if (isMastered(stat)) return;
+          const proximity = masteryProximity(stat);
+          if (proximity <= 0) return;
+          if (!best || proximity > best.proximity) {
+            const hand = handPool.find((h) => h.id === id);
+            if (!hand) return;
+            best = {
+              id,
+              notation: hand.notation,
+              proximity,
+              accuracy: handAccuracy(stat),
+              attempts: stat.total,
+            };
+          }
+        });
+        return best;
+      }, [history.handStats, handPool]);
+
+      const doReset = () => {
+        if (!resetConfirm) {
+          setResetConfirm(true);
+          return;
+        }
+        const fresh = defaultHistory();
+        setHistory(fresh);
+        saveHistory(fresh);
+        setResetConfirm(false);
+      };
+
+      return (
+        <div
+          className="w-full min-h-screen flex flex-col items-center px-4 py-6"
+          style={{
+            background: `radial-gradient(ellipse at top, ${FELT} 0%, ${FELT_DEEP} 78%)`,
+            fontFamily: "'Inter', ui-sans-serif, system-ui, sans-serif",
+            "--dur-deal": `${durations.deal}ms`,
+            "--dur-shake": `${durations.shake}ms`,
+            "--dur-sparkle": `${durations.sparkle}ms`,
+            "--dur-tick": `${durations.tick}ms`,
+            "--dur-mastery": `${durations.mastery}ms`,
+            "--dur-flawless": `${durations.flawless}ms`,
+          }}
+        >
+          <style>{`
+            @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+            .deal-in { animation: dealIn var(--dur-deal, 240ms) ease-out; }
+            @keyframes dealIn {
+              from { opacity: 0; transform: translateY(6px) scale(0.98); }
+              to { opacity: 1; transform: translateY(0) scale(1); }
+            }
+            .feedback-wrong { animation: shakeX var(--dur-shake, 420ms) ease-in-out; }
+            .sparkle-burst { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+            .sparkle-burst .sparkle {
+              position: absolute;
+              opacity: 0;
+              animation: sparklePop var(--dur-sparkle, 700ms) ease-out forwards;
+            }
+            .sparkle-burst .sparkle-1 { top: 8%; left: 16%; animation-delay: 0ms; }
+            .sparkle-burst .sparkle-2 { top: 12%; right: 14%; animation-delay: 60ms; }
+            .sparkle-burst .sparkle-3 { bottom: 16%; left: 48%; animation-delay: 110ms; }
+            .sparkle-burst .tick-pop {
+              position: absolute;
+              top: 42%;
+              left: 50%;
+              transform: translate(-50%, -50%);
+              opacity: 0;
+              animation: tickPop var(--dur-tick, 520ms) ease-out forwards;
+              animation-delay: 40ms;
+            }
+            @keyframes sparklePop {
+              0% { opacity: 0; transform: scale(0.3) rotate(0deg); }
+              40% { opacity: 1; transform: scale(1.15) rotate(15deg); }
+              100% { opacity: 0; transform: scale(0.9) rotate(25deg) translateY(-14px); }
+            }
+            @keyframes tickPop {
+              0% { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+              55% { opacity: 1; transform: translate(-50%, -50%) scale(1.25); }
+              100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            }
+            @keyframes shakeX {
+              0%, 100% { transform: translateX(0); }
+              20% { transform: translateX(-6px); }
+              40% { transform: translateX(6px); }
+              60% { transform: translateX(-4px); }
+              80% { transform: translateX(4px); }
+            }
+
+            /* --- hand-mastered celebration: fires once, on the exact correct
+               answer that crosses a hand into mastery --- */
+            .mastered-glow { animation: masteredGlow var(--dur-mastery, 1700ms) ease-out; }
+            @keyframes masteredGlow {
+              0% { box-shadow: 0 0 0 0 rgba(139,111,209,0); }
+              30% { box-shadow: 0 0 34px 8px rgba(139,111,209,0.55); }
+              100% { box-shadow: 0 0 0 0 rgba(139,111,209,0); }
+            }
+            .mastered-burst { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+            .mastered-burst .mastered-icon {
+              position: absolute;
+              opacity: 0;
+              animation: masteredIconPop var(--dur-mastery, 1700ms) ease-out forwards;
+            }
+            .mastered-icon-tl { top: -4px; left: -4px; animation-delay: 0ms; }
+            .mastered-icon-tr { top: -4px; right: -4px; animation-delay: 70ms; }
+            .mastered-icon-bl { bottom: -4px; left: -4px; animation-delay: 140ms; }
+            .mastered-icon-br { bottom: -4px; right: -4px; animation-delay: 210ms; }
+            @keyframes masteredIconPop {
+              0% { opacity: 0; transform: scale(0.4) rotate(0deg); }
+              35% { opacity: 1; transform: scale(1.2) rotate(-12deg); }
+              100% { opacity: 0; transform: scale(0.9) rotate(-20deg) translateY(-12px); }
+            }
+            .mastered-ribbon {
+              animation: masteredRibbonIn var(--dur-mastery, 1700ms) cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+            }
+            @keyframes masteredRibbonIn {
+              0% { opacity: 0; transform: translate(-50%, 8px) scale(0.7); }
+              55% { opacity: 1; transform: translate(-50%, -6px) scale(1.08); }
+              75% { opacity: 1; transform: translate(-50%, 0px) scale(0.97); }
+              100% { opacity: 1; transform: translate(-50%, 0px) scale(1); }
+            }
+            .notation-flash-mastered { animation: notationFlash var(--dur-mastery, 1700ms) ease-out; }
+            @keyframes notationFlash {
+              0% { color: ${LAVENDER}; background: rgba(139,111,209,0.3); }
+              70% { color: ${LAVENDER}; background: rgba(139,111,209,0.3); }
+              100% { color: ${GOLD}; background: rgba(246,239,221,0.1); }
+            }
+
+            /* --- flawless-run celebration: a full run with zero mistakes --- */
+            .flawless-glow { animation: flawlessGlow var(--dur-flawless, 1500ms) ease-out; }
+            @keyframes flawlessGlow {
+              0% { opacity: 0; transform: scale(0.6); }
+              40% { opacity: 1; transform: scale(1.05); }
+              100% { opacity: 0; transform: scale(1.3); }
+            }
+            .flawless-burst { position: absolute; inset: -10px; pointer-events: none; }
+            .flawless-spark { position: absolute; opacity: 0; animation: flawlessSparkPop var(--dur-flawless, 1500ms) ease-out forwards; }
+            .flawless-spark-1 { top: 0%; left: 6%; animation-delay: 0ms; }
+            .flawless-spark-2 { top: 2%; right: 4%; animation-delay: 80ms; }
+            .flawless-spark-3 { bottom: 8%; left: 0%; animation-delay: 160ms; }
+            .flawless-spark-4 { bottom: 2%; right: 8%; animation-delay: 240ms; }
+            .flawless-spark-5 { top: 42%; left: -6%; animation-delay: 320ms; }
+            .flawless-spark-6 { top: 40%; right: -6%; animation-delay: 400ms; }
+            @keyframes flawlessSparkPop {
+              0% { opacity: 0; transform: scale(0.3) rotate(0deg) translateY(0); }
+              40% { opacity: 1; transform: scale(1.3) rotate(20deg) translateY(-6px); }
+              100% { opacity: 0; transform: scale(0.9) rotate(35deg) translateY(-26px); }
+            }
+            .flawless-trophy { animation: flawlessTrophyPop 900ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+            @keyframes flawlessTrophyPop {
+              0% { opacity: 0; transform: scale(0.5) rotate(-8deg); }
+              60% { opacity: 1; transform: scale(1.15) rotate(4deg); }
+              100% { opacity: 1; transform: scale(1) rotate(0deg); }
+            }
+            .flawless-text { animation: flawlessTextIn 700ms ease-out 200ms both; }
+            @keyframes flawlessTextIn {
+              from { opacity: 0; transform: translateY(6px); }
+              to { opacity: 1; transform: translateY(0); }
+            }
+
+            /* --- hand inspector modal --- */
+            .hand-inspector-in { animation: handInspectorIn 180ms ease-out; }
+            @keyframes handInspectorIn {
+              from { opacity: 0; transform: scale(0.94) translateY(6px); }
+              to { opacity: 1; transform: scale(1) translateY(0); }
+            }
+
+            /* --- clickable heatmap tiles --- */
+            .heatmap-cell { transition: transform 120ms ease-out, box-shadow 120ms ease-out; }
+            .heatmap-cell:hover, .heatmap-cell:focus-visible {
+              transform: scale(1.22);
+              z-index: 2;
+              box-shadow: 0 0 0 1px rgba(246,239,221,0.5), 0 4px 10px rgba(0,0,0,0.4);
+              outline: none;
+            }
+
+            /* --- polychrome holo effect on mastered cells, inspired by Balatro's
+               foil cards: a spinning rainbow core plus a glossy diagonal sheen,
+               each mastered cell running its own randomized speed/delay/hue so
+               the whole heatmap shimmers unevenly instead of in lockstep --- */
+            .mastered-cell {
+              box-shadow: 0 0 0 1px rgba(201,174,242,0.55), 0 0 7px 1px rgba(201,174,242,0.5);
+            }
+            .mastered-cell::before {
+              content: "";
+              position: absolute;
+              inset: -40%;
+              background: conic-gradient(
+                from var(--holo-hue, 0deg),
+                #ff6ec7, #ffd166, #6ee7ff, #8b6fd1, #7cd9ae, #ff6ec7
+              );
+              opacity: 0.5;
+              mix-blend-mode: color-dodge;
+              animation: holoSpin var(--holo-spin-dur, 6s) linear infinite;
+              animation-delay: calc(var(--holo-delay, 0s) * -1);
+            }
+            .mastered-cell::after {
+              content: "";
+              position: absolute;
+              inset: 0;
+              background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,0.8) 50%, transparent 65%);
+              background-size: 250% 250%;
+              background-position: -150% -150%;
+              animation: masteredSheen var(--holo-sheen-dur, 3.4s) ease-in-out infinite;
+              animation-delay: var(--holo-delay, 0s);
+              mix-blend-mode: overlay;
+            }
+            @keyframes holoSpin {
+              to { transform: rotate(calc(var(--holo-spin-dir, 1) * 360deg)); }
+            }
+            @keyframes masteredSheen {
+              0%, 15% { background-position: -150% -150%; }
+              55%, 100% { background-position: 150% 150%; }
+            }
+
+            /* --- redemption info reveal on the summary screen --- */
+            .redemption-hint { animation: redemptionHintIn 180ms ease-out; }
+            @keyframes redemptionHintIn {
+              from { opacity: 0; transform: translateY(-3px); }
+              to { opacity: 1; transform: translateY(0); }
+            }
+
+            @media (prefers-reduced-motion: reduce) {
+              .deal-in { animation: none; }
+              .feedback-wrong { animation: none; }
+              .sparkle-burst .sparkle, .sparkle-burst .tick-pop { animation: none; opacity: 0; }
+              .mastered-glow { animation: none; box-shadow: none; }
+              .mastered-burst .mastered-icon { animation: none; opacity: 0; }
+              .mastered-ribbon { animation: none; opacity: 1; transform: translate(-50%, 0) scale(1); }
+              .notation-flash-mastered { animation: none; color: ${GOLD}; background: rgba(246,239,221,0.1); }
+              .flawless-glow, .flawless-spark { animation: none; opacity: 0; }
+              .flawless-trophy, .flawless-text { animation: none; opacity: 1; transform: none; }
+              .mastered-cell::before, .mastered-cell::after { animation: none; opacity: 0; }
+              .heatmap-cell:hover, .heatmap-cell:focus-visible { transform: none; }
+              .hand-inspector-in { animation: none; }
+              .redemption-hint { animation: none; }
+            }
+          `}</style>
+
+          <header className="w-full max-w-md flex items-center justify-between mb-6">
+            <div>
+              <h1
+                className="text-2xl font-semibold leading-none"
+                style={{ fontFamily: "'Fraunces', serif", color: CREAM }}
+              >
+                The Felt
+              </h1>
+              <p className="text-xs mt-1" style={{ color: MUTED_CREAM }}>
+                Preflop range trainer
+              </p>
+            </div>
+            <nav className="flex gap-2">
+              <TabButton active={activeTab === "quiz"} onClick={() => setActiveTab("quiz")}>
+                Quiz
+              </TabButton>
+              <TabButton active={activeTab === "history"} onClick={() => setActiveTab("history")}>
+                History
+              </TabButton>
+              <TabButton active={activeTab === "settings"} onClick={() => setActiveTab("settings")}>
+                <SettingsIcon size={14} />
+              </TabButton>
+            </nav>
+          </header>
+
+          <main className="w-full max-w-md flex-1">
+            {!ready && (
+              <div className="text-center py-20" style={{ color: MUTED_CREAM }}>
+                Shuffling the deck…
+              </div>
+            )}
+
+            {ready && activeTab === "quiz" && phase === "quiz" && currentHand && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm" style={{ color: MUTED_CREAM }}>
+                    Hand {idx + 1} of {RUN_SIZE}
+                  </span>
+                  <span className="text-sm" style={{ color: MUTED_CREAM }}>
+                    {runLogRef.current.filter((a) => a.correct).length} correct so far
+                  </span>
+                </div>
+                <ProgressBar value={idx + (chosen ? 1 : 0)} max={RUN_SIZE} />
+
+                {(() => {
+                  const mastering = justMastered && justMastered.id === currentHand.id;
+                  return (
+                    <div
+                      key={currentHand.id + idx}
+                      className={`deal-in mt-8 mb-6 rounded-3xl flex flex-col items-center py-8 relative ${
+                        chosen ? (chosen === currentHand.action ? "feedback-correct" : "feedback-wrong") : ""
+                      } ${mastering ? "mastered-glow" : ""}`}
+                      style={{
+                        background: "rgba(0,0,0,0.18)",
+                        border: `1px solid ${
+                          chosen
+                            ? chosen === currentHand.action
+                              ? "rgba(124,217,174,0.55)"
+                              : "rgba(226,137,126,0.55)"
+                            : "rgba(207,168,75,0.25)"
+                        }`,
+                      }}
+                    >
+                      {chosen && chosen === currentHand.action && (
+                        <div className="sparkle-burst" aria-hidden="true">
+                          <Sparkles className="sparkle sparkle-1" size={18} color={GOLD} />
+                          <Sparkles className="sparkle sparkle-2" size={16} color="#7CD9AE" />
+                          <Sparkles className="sparkle sparkle-3" size={18} color={GOLD} />
+                          <Check className="tick-pop" size={38} color="#7CD9AE" strokeWidth={3} />
+                        </div>
+                      )}
+                      {mastering && (
+                        <>
+                          <div
+                            className="mastered-ribbon absolute flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap"
+                            style={{
+                              top: -14,
+                              left: "50%",
+                              background: MASTERED_PURPLE,
+                              color: CREAM,
+                              boxShadow: "0 4px 14px rgba(0,0,0,0.35)",
+                            }}
+                          >
+                            <Award size={12} />
+                            Hand mastered
+                          </div>
+                          <div className="mastered-burst" aria-hidden="true">
+                            <Award className="mastered-icon mastered-icon-tl" size={16} color={LAVENDER} />
+                            <Award className="mastered-icon mastered-icon-tr" size={16} color={LAVENDER} />
+                            <Award className="mastered-icon mastered-icon-bl" size={16} color={LAVENDER} />
+                            <Award className="mastered-icon mastered-icon-br" size={16} color={LAVENDER} />
+                          </div>
+                        </>
+                      )}
+                      <div className="flex gap-3 mb-5">
+                        <MiniCard rank={currentHand.notation.replace("s", "")[0]} suit={currentHand.suits[0]} delay={-6} />
+                        <MiniCard rank={currentHand.notation.replace("s", "")[1]} suit={currentHand.suits[1]} delay={6} />
+                      </div>
+                      <div
+                        className={`px-5 py-1.5 rounded-full text-xl font-semibold tracking-wide ${
+                          mastering ? "notation-flash-mastered" : ""
+                        }`}
+                        style={{ background: "rgba(246,239,221,0.1)", color: GOLD, fontFamily: "'Fraunces', serif" }}
+                      >
+                        {currentHand.notation}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                <div className="flex gap-3 mb-4">
+                  <ChipButton
+                    label="Raise"
+                    bg={RAISE_BG}
+                    textColor="#ffffff"
+                    disabled={!!chosen}
+                    onClick={() => handleAnswer("R")}
+                    state={
+                      !chosen
+                        ? null
+                        : chosen === "R"
+                        ? "chosen"
+                        : currentHand.action === "R"
+                        ? "correct-hint"
+                        : "dim"
+                    }
+                  />
+                  <ChipButton
+                    label="Call"
+                    bg={CALL_BG}
+                    textColor={CALL_TEXT}
+                    disabled={!!chosen}
+                    onClick={() => handleAnswer("C")}
+                    state={
+                      !chosen
+                        ? null
+                        : chosen === "C"
+                        ? "chosen"
+                        : currentHand.action === "C"
+                        ? "correct-hint"
+                        : "dim"
+                    }
+                  />
+                  <ChipButton
+                    label="Fold"
+                    bg={FOLD_BG}
+                    textColor="#ffffff"
+                    disabled={!!chosen}
+                    onClick={() => handleAnswer("F")}
+                    state={
+                      !chosen
+                        ? null
+                        : chosen === "F"
+                        ? "chosen"
+                        : currentHand.action === "F"
+                        ? "correct-hint"
+                        : "dim"
+                    }
+                  />
+                </div>
+
+                {chosen && (
+                  <div className="flex items-center justify-between rounded-2xl px-4 py-3 mb-4" style={{ background: "rgba(246,239,221,0.08)" }}>
+                    <div className="flex items-center gap-2">
+                      {chosen === currentHand.action ? (
+                        <Check size={18} color="#7CD9AE" />
+                      ) : (
+                        <X size={18} color="#E2897E" />
+                      )}
+                      <span className="text-sm" style={{ color: CREAM }}>
+                        {chosen === currentHand.action
+                          ? `Correct — ${ACTION_WORD[currentHand.action]} is right here.`
+                          : `Not quite. The chart says ${ACTION_WORD[currentHand.action]}.`}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  onClick={handleNext}
+                  disabled={!chosen || masteryLock}
+                  className="w-full rounded-2xl py-3 flex items-center justify-center gap-2 font-medium transition disabled:opacity-30"
+                  style={{ background: CREAM, color: INK }}
+                >
+                  {masteryLock ? (
+                    "Nice — one sec…"
+                  ) : (
+                    <>
+                      {idx + 1 < deck.length ? "Next hand" : "See results"}
+                      <ArrowRight size={16} />
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+
+            {ready && activeTab === "quiz" && phase === "redemption" && currentRedemption && (
+              <div>
+                <div
+                  className="rounded-2xl px-4 py-3 mb-4"
+                  style={{ background: "rgba(79,182,199,0.12)", border: `1px solid rgba(79,182,199,0.35)` }}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <RotateCcw size={14} color={REDEMPTION_ACCENT} />
+                    <span className="text-sm font-semibold" style={{ color: REDEMPTION_ACCENT }}>
+                      Redemption round
+                    </span>
+                  </div>
+                  <p className="text-xs" style={{ color: MUTED_CREAM }}>
+                    A chance to fix mistakes from your first {REDEMPTION_WINDOW} hands. This doesn't change the score
+                    from your run — getting it right just softens that hand's miss.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm" style={{ color: MUTED_CREAM }}>
+                    Redemption {redemptionIdx + 1} of {redemptionQueue.length}
+                  </span>
+                </div>
+                <ProgressBar value={redemptionIdx + (redemptionChosen ? 1 : 0)} max={redemptionQueue.length} />
+
+                {(() => {
+                  return (
+                    <div
+                      key={currentRedemption.id + redemptionIdx}
+                      className={`deal-in mt-8 mb-6 rounded-3xl flex flex-col items-center py-8 relative ${
+                        redemptionChosen
+                          ? redemptionChosen === currentRedemption.action
+                            ? "feedback-correct"
+                            : "feedback-wrong"
+                          : ""
+                      }`}
+                      style={{
+                        background: "rgba(0,0,0,0.18)",
+                        border: `1px solid ${
+                          redemptionChosen
+                            ? redemptionChosen === currentRedemption.action
+                              ? "rgba(124,217,174,0.55)"
+                              : "rgba(226,137,126,0.55)"
+                            : "rgba(79,182,199,0.35)"
+                        }`,
+                      }}
+                    >
+                      {redemptionChosen && redemptionChosen === currentRedemption.action && (
+                        <div className="sparkle-burst" aria-hidden="true">
+                          <Sparkles className="sparkle sparkle-1" size={18} color={GOLD} />
+                          <Sparkles className="sparkle sparkle-2" size={16} color="#7CD9AE" />
+                          <Sparkles className="sparkle sparkle-3" size={18} color={GOLD} />
+                          <Check className="tick-pop" size={38} color="#7CD9AE" strokeWidth={3} />
+                        </div>
+                      )}
+                      <div className="flex gap-3 mb-5">
+                        <MiniCard
+                          rank={currentRedemption.notation.replace("s", "")[0]}
+                          suit={currentRedemption.suits[0]}
+                          delay={-6}
+                        />
+                        <MiniCard
+                          rank={currentRedemption.notation.replace("s", "")[1]}
+                          suit={currentRedemption.suits[1]}
+                          delay={6}
+                        />
+                      </div>
+                      <div
+                        className="px-5 py-1.5 rounded-full text-xl font-semibold tracking-wide"
+                        style={{ background: "rgba(246,239,221,0.1)", color: GOLD, fontFamily: "'Fraunces', serif" }}
+                      >
+                        {currentRedemption.notation}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                <div className="flex gap-3 mb-4">
+                  <ChipButton
+                    label="Raise"
+                    bg={RAISE_BG}
+                    textColor="#ffffff"
+                    disabled={!!redemptionChosen}
+                    onClick={() => handleRedemptionAnswer("R")}
+                    state={
+                      !redemptionChosen
+                        ? null
+                        : redemptionChosen === "R"
+                        ? "chosen"
+                        : currentRedemption.action === "R"
+                        ? "correct-hint"
+                        : "dim"
+                    }
+                  />
+                  <ChipButton
+                    label="Call"
+                    bg={CALL_BG}
+                    textColor={CALL_TEXT}
+                    disabled={!!redemptionChosen}
+                    onClick={() => handleRedemptionAnswer("C")}
+                    state={
+                      !redemptionChosen
+                        ? null
+                        : redemptionChosen === "C"
+                        ? "chosen"
+                        : currentRedemption.action === "C"
+                        ? "correct-hint"
+                        : "dim"
+                    }
+                  />
+                  <ChipButton
+                    label="Fold"
+                    bg={FOLD_BG}
+                    textColor="#ffffff"
+                    disabled={!!redemptionChosen}
+                    onClick={() => handleRedemptionAnswer("F")}
+                    state={
+                      !redemptionChosen
+                        ? null
+                        : redemptionChosen === "F"
+                        ? "chosen"
+                        : currentRedemption.action === "F"
+                        ? "correct-hint"
+                        : "dim"
+                    }
+                  />
+                </div>
+
+                {redemptionChosen && (
+                  <div
+                    className="flex items-center justify-between rounded-2xl px-4 py-3 mb-4"
+                    style={{ background: "rgba(246,239,221,0.08)" }}
+                  >
+                    <div className="flex items-center gap-2">
+                      {redemptionChosen === currentRedemption.action ? (
+                        <Check size={18} color="#7CD9AE" />
+                      ) : (
+                        <X size={18} color="#E2897E" />
+                      )}
+                      <span className="text-sm" style={{ color: CREAM }}>
+                        {redemptionChosen === currentRedemption.action
+                          ? "Redeemed — that mistake's impact just got lighter."
+                          : `Not quite. The chart says ${ACTION_WORD[currentRedemption.action]}.`}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  onClick={handleRedemptionNext}
+                  disabled={!redemptionChosen || masteryLock}
+                  className="w-full rounded-2xl py-3 flex items-center justify-center gap-2 font-medium transition disabled:opacity-30"
+                  style={{ background: CREAM, color: INK }}
+                >
+                  {masteryLock ? (
+                    "Nice — one sec…"
+                  ) : (
+                    <>
+                      {redemptionIdx + 1 < redemptionQueue.length ? "Next redemption" : "See results"}
+                      <ArrowRight size={16} />
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+
+            {ready && activeTab === "quiz" && phase === "summary" && summary && (
+              <div className="text-center pt-6">
+                {summary.flawless ? (
+                  <div className="relative flex flex-col items-center mb-1" style={{ minHeight: 92 }}>
+                    <div
+                      className="flawless-glow absolute rounded-full"
+                      style={{
+                        width: 150,
+                        height: 150,
+                        top: -20,
+                        background: `radial-gradient(circle, rgba(207,168,75,0.45), rgba(207,168,75,0) 70%)`,
+                      }}
+                      aria-hidden="true"
+                    />
+                    <div className="flawless-burst" aria-hidden="true">
+                      <Sparkles className="flawless-spark flawless-spark-1" size={18} color={GOLD} />
+                      <Sparkles className="flawless-spark flawless-spark-2" size={16} color={GOLD} />
+                      <Sparkles className="flawless-spark flawless-spark-3" size={18} color={GOLD} />
+                      <Sparkles className="flawless-spark flawless-spark-4" size={16} color={GOLD} />
+                      <Sparkles className="flawless-spark flawless-spark-5" size={18} color={GOLD} />
+                      <Sparkles className="flawless-spark flawless-spark-6" size={16} color={GOLD} />
+                    </div>
+                    <Trophy size={44} color={GOLD} className="flawless-trophy relative" />
+                    <p
+                      className="flawless-text text-sm font-bold tracking-widest mt-2 relative"
+                      style={{ color: GOLD, fontFamily: "'Fraunces', serif" }}
+                    >
+                      FLAWLESS RUN
+                    </p>
+                  </div>
+                ) : (
+                  <Trophy size={36} color={GOLD} className="mx-auto mb-3" />
+                )}
+                <h2 className="text-xl font-semibold mb-1" style={{ fontFamily: "'Fraunces', serif", color: CREAM }}>
+                  Run complete
+                </h2>
+                <p className="text-4xl font-bold mb-1" style={{ color: GOLD, fontFamily: "'Fraunces', serif" }}>
+                  {summary.correct}/{summary.total}
+                </p>
+                <p className="text-sm mb-6" style={{ color: MUTED_CREAM }}>
+                  {pct(summary.correct, summary.total)}% correct this run
+                </p>
+
+                {summary.redemption && (
+                  <div
+                    className="text-left rounded-2xl px-4 py-3 mb-6 relative"
+                    style={{ background: "rgba(79,182,199,0.12)", border: `1px solid rgba(79,182,199,0.35)` }}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        <RotateCcw size={14} color={REDEMPTION_ACCENT} />
+                        <span className="text-sm font-semibold" style={{ color: REDEMPTION_ACCENT }}>
+                          Redemption round
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        aria-label="What is the redemption round?"
+                        aria-expanded={showRedemptionHint}
+                        onMouseEnter={() => setShowRedemptionHint(true)}
+                        onMouseLeave={() => setShowRedemptionHint(false)}
+                        onFocus={() => setShowRedemptionHint(true)}
+                        onBlur={() => setShowRedemptionHint(false)}
+                        onClick={() => setShowRedemptionHint((v) => !v)}
+                        className="flex items-center justify-center rounded-full"
+                        style={{ width: 18, height: 18, background: "rgba(79,182,199,0.25)", color: REDEMPTION_ACCENT }}
+                      >
+                        <HelpCircle size={13} />
+                      </button>
+                    </div>
+                    <p className="text-sm" style={{ color: CREAM }}>
+                      Corrected {summary.redemption.redeemed} of {summary.redemption.attempted} early mistakes.
+                    </p>
+                    {showRedemptionHint && (
+                      <p className="redemption-hint text-xs mt-2" style={{ color: MUTED_CREAM }}>
+                        Doesn't change the score above — it just softens those hands' impact going forward.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {summary.masteredHands && summary.masteredHands.length > 0 && (
+                  <div
+                    className="text-left rounded-2xl px-4 py-3 mb-6"
+                    style={{ background: "rgba(139,111,209,0.14)", border: `1px solid rgba(139,111,209,0.4)` }}
+                  >
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <Award size={14} color={LAVENDER} />
+                      <span className="text-sm font-semibold" style={{ color: LAVENDER }}>
+                        {summary.masteredHands.length === 1
+                          ? "1 hand mastered this run"
+                          : `${summary.masteredHands.length} hands mastered this run`}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {summary.masteredHands.map((m) => (
+                        <span
+                          key={m.id}
+                          className="text-xs font-medium px-2 py-0.5 rounded-full"
+                          style={{ background: MASTERED_PURPLE, color: "#241835" }}
+                        >
+                          {m.notation}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div
+                  className="text-left rounded-2xl px-4 py-3 mb-6"
+                  style={{ background: "rgba(246,239,221,0.06)" }}
+                >
+                  <p className="text-sm font-semibold mb-1" style={{ color: CREAM }}>
+                    Next closest mastery
+                  </p>
+                  {nextClosestMastery ? (
+                    <>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span
+                          className="text-sm font-semibold"
+                          style={{ color: GOLD, fontFamily: "'Fraunces', serif" }}
+                        >
+                          {nextClosestMastery.notation}
+                        </span>
+                        <span className="text-xs" style={{ color: MUTED_CREAM }}>
+                          {Math.round(nextClosestMastery.proximity * 100)}% of the way there
+                        </span>
+                      </div>
+                      <ProgressBar value={nextClosestMastery.proximity * 100} max={100} />
+                      <p className="text-xs mt-1.5" style={{ color: MUTED_CREAM }}>
+                        {nextClosestMastery.attempts} attempts so far ·{" "}
+                        {Math.round((nextClosestMastery.accuracy || 0) * 100)}% accuracy
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-xs" style={{ color: MUTED_CREAM }}>
+                      Keep practicing — mastery progress will show up here once a hand's a few reps in.
+                    </p>
+                  )}
+                </div>
+
+                <div className="text-left mb-6">
+                  <CategoryTable overall={summary.cats} last={null} />
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={startNewRun}
+                    className="flex-1 rounded-2xl py-3 font-medium"
+                    style={{ background: CREAM, color: INK }}
+                  >
+                    New run
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("history")}
+                    className="flex-1 rounded-2xl py-3 font-medium"
+                    style={{ background: "rgba(246,239,221,0.12)", color: CREAM }}
+                  >
+                    View history
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {ready && activeTab === "history" && (
+              <div>
+                <div className="grid grid-cols-3 gap-3 mb-5">
+                  <div className="rounded-2xl p-4" style={{ background: "rgba(246,239,221,0.06)" }}>
+                    <p className="text-xs mb-1" style={{ color: MUTED_CREAM }}>
+                      Overall accuracy
+                    </p>
+                    <p className="text-3xl font-bold" style={{ color: CREAM, fontFamily: "'Fraunces', serif" }}>
+                      {overallPct === null ? "—" : `${overallPct}%`}
+                    </p>
+                    <p className="text-xs mt-1" style={{ color: MUTED_CREAM }}>
+                      {["pair", "suited", "offsuit"].reduce((s, k) => s + history.aggregate[k].correct, 0)}/
+                      {["pair", "suited", "offsuit"].reduce((s, k) => s + history.aggregate[k].total, 0)} hands
+                    </p>
+                  </div>
+                  <div className="rounded-2xl p-4" style={{ background: "rgba(246,239,221,0.06)" }}>
+                    <p className="text-xs mb-1" style={{ color: MUTED_CREAM }}>
+                      Last run
+                    </p>
+                    <p className="text-3xl font-bold" style={{ color: GOLD, fontFamily: "'Fraunces', serif" }}>
+                      {lastRunPct === null ? "—" : `${lastRunPct}%`}
+                    </p>
+                    <p className="text-xs mt-1" style={{ color: MUTED_CREAM }}>
+                      {lastRun ? `${lastRun.correct}/${lastRun.total} hands` : "No runs yet"}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl p-4" style={{ background: "rgba(207,168,75,0.1)" }}>
+                    <p className="text-xs mb-1 flex items-center gap-1" style={{ color: MUTED_CREAM }}>
+                      <Trophy size={11} color={GOLD} />
+                      Flawless runs
+                    </p>
+                    <p className="text-3xl font-bold" style={{ color: GOLD, fontFamily: "'Fraunces', serif" }}>
+                      {history.flawlessRuns || 0}
+                    </p>
+                    <p className="text-xs mt-1" style={{ color: MUTED_CREAM }}>
+                      No mistakes, start to finish
+                    </p>
+                  </div>
+                </div>
+
+                <p className="text-sm mb-2" style={{ color: CREAM }}>
+                  Accuracy trend
+                </p>
+                <div className="mb-6">
+                  <AccuracyTrend runs={history.runs} />
+                </div>
+
+                <p className="text-sm mb-2" style={{ color: CREAM }}>
+                  Breakdown
+                </p>
+                <div className="mb-6">
+                  <CategoryTable overall={history.aggregate} last={lastRun ? lastRun.cats : null} />
+                </div>
+
+                <p className="text-sm mb-2" style={{ color: CREAM }}>
+                  Accuracy by hand
+                </p>
+                <p className="text-xs mb-2" style={{ color: MUTED_CREAM }}>
+                  Tap any tile for the full breakdown on that hand.
+                </p>
+                <div className="rounded-xl p-3 mb-6" style={{ background: "rgba(246,239,221,0.06)" }}>
+                  <AccuracyHeatmap
+                    handStats={history.handStats || {}}
+                    onSelectHand={(hand) => setInspectedHand({ ...hand, suits: assignSuits(hand.category) })}
+                  />
+                </div>
+
+                <p className="text-sm mb-2" style={{ color: CREAM }}>
+                  Run log
+                </p>
+                <div className="rounded-xl overflow-hidden mb-6" style={{ background: "rgba(246,239,221,0.06)" }}>
+                  {history.runs.length === 0 && (
+                    <p className="text-sm px-4 py-4" style={{ color: MUTED_CREAM }}>
+                      Finish a run to see it logged here.
+                    </p>
+                  )}
+                  {history.runs.slice(0, 10).map((r) => (
+                    <div
+                      key={r.id}
+                      className="flex items-center justify-between px-4 py-2.5 text-sm"
+                      style={{ color: CREAM, borderBottom: "1px solid rgba(246,239,221,0.06)" }}
+                    >
+                      <span style={{ color: MUTED_CREAM }}>
+                        {new Date(r.timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric" })}{" "}
+                        {new Date(r.timestamp).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        {r.flawless && (
+                          <span
+                            className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                            style={{ background: "rgba(207,168,75,0.18)", color: GOLD }}
+                          >
+                            Flawless
+                          </span>
+                        )}
+                        {r.correct}/{r.total} · {pct(r.correct, r.total)}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {!hasStorage && (
+                  <p className="text-xs mb-4" style={{ color: MUTED_CREAM }}>
+                    Storage isn't available in this preview, so history will reset when you close this.
+                  </p>
+                )}
+
+                <button
+                  onClick={doReset}
+                  onBlur={() => setResetConfirm(false)}
+                  className="w-full rounded-2xl py-3 flex items-center justify-center gap-2 text-sm font-medium"
+                  style={{
+                    background: resetConfirm ? FOLD_BG : "rgba(246,239,221,0.1)",
+                    color: resetConfirm ? "#ffffff" : CREAM,
+                  }}
+                >
+                  <RotateCcw size={14} />
+                  {resetConfirm ? "Confirm reset — this can't be undone" : "Reset history"}
+                </button>
+              </div>
+            )}
+
+            {ready && activeTab === "settings" && (
+              <div>
+                <div className="rounded-2xl p-4 mb-4" style={{ background: "rgba(246,239,221,0.06)" }}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium" style={{ color: CREAM }}>
+                        Auto-advance
+                      </p>
+                      <p className="text-xs mt-0.5" style={{ color: MUTED_CREAM }}>
+                        Skip to the next hand automatically after a correct answer.
+                      </p>
+                    </div>
+                    <ToggleSwitch
+                      checked={settings.autoAdvance}
+                      onChange={(v) => updateSettings({ autoAdvance: v })}
+                      label=""
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-2xl p-4 mb-4" style={{ background: "rgba(246,239,221,0.06)" }}>
+                  <p className="text-sm font-medium mb-1" style={{ color: CREAM }}>
+                    Animation speed
+                  </p>
+                  <p className="text-xs mb-3" style={{ color: MUTED_CREAM }}>
+                    Controls how fast the deal-in, right/wrong effects, and auto-advance delay play out.
+                  </p>
+                  <div className="flex gap-2">
+                    {Object.entries(SPEED_PRESETS).map(([key, preset]) => {
+                      const active = settings.animationSpeed === key;
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => updateSettings({ animationSpeed: key })}
+                          className="flex-1 rounded-xl py-2.5 px-2 flex flex-col items-center transition"
+                          style={{
+                            background: active ? CREAM : "rgba(246,239,221,0.1)",
+                            color: active ? INK : CREAM,
+                          }}
+                        >
+                          <span className="text-sm font-semibold">{preset.label}</span>
+                          <span
+                            className="text-[10px] mt-0.5 text-center"
+                            style={{ color: active ? "rgba(32,36,31,0.65)" : MUTED_CREAM }}
+                          >
+                            {preset.blurb}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <p className="text-xs px-1" style={{ color: MUTED_CREAM }}>
+                  More settings will land here as the trainer grows.
+                </p>
+              </div>
+            )}
+          </main>
+
+          {inspectedHand && <HandInspectorModal hand={inspectedHand} onClose={() => setInspectedHand(null)} />}
+        </div>
+      );
+    }
+
+    // Mount
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<PokerEVTrainer />);
+  </script>
+</body>
+</html>
