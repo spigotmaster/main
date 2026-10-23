@@ -111,27 +111,282 @@
 
     /* ----------------------------------------------------------------------
        DATA: the 13x13 preflop EV chart, encoded as raise/call/fold decisions.
-       Rows/cols run A,K,Q,J,T,9,8,7,6,5,4,3,2. Values transcribed directly
-       from the uploaded chart's colour coding (green=raise, yellow=call,
-       red=fold).
+       Hands run A,K,Q,J,T,9,8,7,6,5,4,3,2; each hand has an EV per position.
     ------------------------------------------------------------------------- */
     const RANKS = ["A", "K", "Q", "J", "T", "9", "8", "7", "6", "5", "4", "3", "2"];
 
-    const ACTION_GRID = {
-      A: ["R","R","R","R","R","R","R","R","R","R","R","R","C"],
-      K: ["R","R","R","R","R","R","C","C","C","C","C","F","F"],
-      Q: ["R","R","R","R","R","R","C","C","C","F","F","F","F"],
-      J: ["R","R","R","R","R","R","C","C","F","F","F","F","F"],
-      T: ["R","R","C","C","R","R","C","C","F","F","F","F","F"],
-      9: ["R","C","C","F","F","R","C","C","F","F","F","F","F"],
-      8: ["C","F","F","F","F","F","R","C","F","F","F","F","F"],
-      7: ["C","F","F","F","F","F","F","R","C","F","F","F","F"],
-      6: ["F","F","F","F","F","F","F","F","R","F","F","F","F"],
-      5: ["F","F","F","F","F","F","F","F","F","C","F","F","F"],
-      4: ["F","F","F","F","F","F","F","F","F","F","C","F","F"],
-      3: ["F","F","F","F","F","F","F","F","F","F","F","C","F"],
-      2: ["F","F","F","F","F","F","F","F","F","F","F","F","C"],
+    /* Per-position EV table (columns: SB, BB, 3, D) from the uploaded spreadsheet.
+       Action rule: EV < 0 -> Fold, 0 <= EV <= 0.09 -> Call, EV > 0.09 -> Raise. */
+    const POSITIONS = ["SB", "BB", "3", "D"];
+    const POSITION_LABEL = { SB: "Small blind", BB: "Big blind", "3": "Seat 3", D: "Dealer" };
+    const CALL_MAX_EV = 0.09;
+    const EV_TABLE = {
+      "AA": [1.99, 1.97, 1.92, 2.1],
+      "AKs": [0.7, 0.72, 0.74, 0.76],
+      "AQs": [0.53, 0.49, 0.58, 0.8],
+      "AJs": [0.4, 0.39, 0.4, 0.6],
+      "ATs": [0.29, 0.25, 0.34, 0.54],
+      "A9s": [0.17, 0.14, 0.25, 0.33],
+      "A8s": [0.05, 0.12, 0.26, 0.2],
+      "A7s": [0.04, 0.08, 0.14, 0.19],
+      "A6s": [0.01, 0.07, 0.1, 0.19],
+      "A5s": [0.06, 0.06, 0.2, 0.12],
+      "A4s": [0.01, 0.02, 0.13, 0.13],
+      "A3s": [0.04, -0.01, 0.13, 0.12],
+      "A2s": [-0.04, -0.04, 0.06, 0.12],
+      "AK": [0.45, 0.47, 0.56, 0.61],
+      "KK": [1.52, 1.49, 1.55, 1.67],
+      "KQs": [0.28, 0.32, 0.41, 0.59],
+      "KJs": [0.31, 0.26, 0.35, 0.4],
+      "KTs": [0.17, 0.21, 0.29, 0.39],
+      "K9s": [0.11, 0.12, 0.22, 0.27],
+      "K8s": [0.0, 0.05, 0.03, 0.07],
+      "K7s": [-0.02, -0.04, 0.04, 0.1],
+      "K6s": [-0.1, -0.02, 0.07, 0.0],
+      "K5s": [-0.1, -0.1, 0.0, 0.04],
+      "K4s": [-0.08, -0.1, 0.04, -0.01],
+      "K3s": [-0.13, -0.11, -0.04, -0.01],
+      "K2s": [-0.08, -0.13, -0.06, 0.0],
+      "AQ": [0.31, 0.34, 0.41, 0.45],
+      "KQ": [0.23, 0.14, 0.26, 0.33],
+      "QQ": [1.2, 1.14, 1.18, 1.24],
+      "QJs": [0.22, 0.16, 0.31, 0.31],
+      "QTs": [0.12, 0.15, 0.28, 0.35],
+      "Q9s": [0.04, 0.04, 0.2, 0.21],
+      "Q8s": [-0.03, 0.01, 0.11, 0.08],
+      "Q7s": [-0.05, -0.08, 0.0, 0.1],
+      "Q6s": [-0.13, -0.07, 0.0, 0.01],
+      "Q5s": [-0.12, -0.19, -0.02, -0.03],
+      "Q4s": [-0.08, -0.08, -0.09, -0.08],
+      "Q3s": [-0.18, -0.18, 0.01, -0.02],
+      "Q2s": [-0.15, -0.15, -0.08, -0.06],
+      "AJ": [0.23, 0.25, 0.28, 0.38],
+      "KJ": [0.07, 0.07, 0.19, 0.26],
+      "QJ": [0.03, 0.05, 0.12, 0.19],
+      "JJ": [0.89, 0.87, 0.92, 1.04],
+      "JTs": [0.07, 0.14, 0.21, 0.25],
+      "J9s": [0.05, 0.0, 0.09, 0.16],
+      "J8s": [-0.07, -0.04, 0.04, 0.08],
+      "J7s": [-0.09, -0.07, -0.01, 0.06],
+      "J6s": [-0.19, -0.15, -0.04, -0.04],
+      "J5s": [-0.13, -0.16, -0.07, 0.0],
+      "J4s": [-0.18, -0.18, -0.06, -0.05],
+      "J3s": [-0.21, -0.16, -0.12, -0.04],
+      "J2s": [-0.19, -0.24, -0.07, -0.06],
+      "AT": [0.1, 0.12, 0.19, 0.31],
+      "KT": [-0.01, 0.06, 0.11, 0.14],
+      "QT": [-0.04, -0.01, 0.09, 0.14],
+      "JT": [-0.02, -0.04, 0.1, 0.14],
+      "TT": [0.65, 0.69, 0.79, 0.83],
+      "T9s": [-0.01, 0.05, 0.16, 0.26],
+      "T8s": [-0.04, -0.04, 0.08, 0.13],
+      "T7s": [-0.07, -0.08, 0.07, 0.1],
+      "T6s": [-0.14, -0.17, -0.06, 0.0],
+      "T5s": [-0.19, -0.22, -0.06, -0.06],
+      "T4s": [-0.25, -0.18, -0.06, -0.03],
+      "T3s": [-0.23, -0.25, -0.08, -0.05],
+      "T2s": [-0.21, -0.22, -0.06, -0.06],
+      "A9": [0.0, 0.01, 0.07, 0.15],
+      "K9": [-0.1, -0.09, 0.02, 0.04],
+      "Q9": [-0.06, -0.14, -0.01, 0.07],
+      "J9": [-0.1, -0.14, -0.02, 0.01],
+      "T9": [-0.13, -0.13, 0.0, 0.05],
+      "99": [0.44, 0.47, 0.59, 0.64],
+      "98s": [-0.06, 0.03, 0.09, 0.12],
+      "97s": [-0.13, -0.07, 0.0, 0.06],
+      "96s": [-0.2, -0.15, -0.04, -0.04],
+      "95s": [-0.2, -0.2, -0.09, -0.05],
+      "94s": [-0.21, -0.2, -0.09, -0.06],
+      "93s": [-0.25, -0.24, -0.05, -0.09],
+      "92s": [-0.16, -0.24, -0.1, -0.06],
+      "A8": [-0.09, 0.0, 0.01, 0.08],
+      "K8": [-0.17, -0.16, -0.04, -0.03],
+      "Q8": [-0.18, -0.16, -0.05, -0.01],
+      "J8": [-0.19, -0.16, -0.07, -0.03],
+      "T8": [-0.15, -0.19, -0.04, 0.01],
+      "98": [-0.15, -0.15, -0.06, -0.04],
+      "88": [0.29, 0.28, 0.37, 0.5],
+      "87s": [-0.11, -0.04, 0.12, 0.08],
+      "86s": [-0.17, -0.07, -0.04, 0.05],
+      "85s": [-0.16, -0.17, -0.09, 0.0],
+      "84s": [-0.2, -0.18, -0.08, -0.04],
+      "83s": [-0.25, -0.22, -0.11, -0.08],
+      "82s": [-0.27, -0.22, -0.1, -0.08],
+      "A7": [-0.11, -0.06, -0.02, 0.06],
+      "K7": [-0.16, -0.16, -0.05, -0.04],
+      "Q7": [-0.2, -0.18, -0.07, -0.03],
+      "J7": [-0.22, -0.25, -0.05, -0.05],
+      "T7": [-0.2, -0.22, -0.05, -0.01],
+      "97": [-0.21, -0.2, -0.03, -0.02],
+      "87": [-0.2, -0.19, -0.07, -0.03],
+      "77": [0.15, 0.16, 0.33, 0.36],
+      "76s": [-0.11, -0.04, 0.02, 0.05],
+      "75s": [-0.18, -0.18, -0.08, -0.01],
+      "74s": [-0.2, -0.16, -0.07, -0.08],
+      "73s": [-0.25, -0.25, -0.1, -0.07],
+      "72s": [-0.28, -0.24, -0.13, -0.06],
+      "A6": [-0.12, -0.15, -0.03, 0.01],
+      "K6": [-0.18, -0.18, -0.07, -0.05],
+      "Q6": [-0.21, -0.23, -0.07, -0.04],
+      "J6": [-0.23, -0.26, -0.05, -0.03],
+      "T6": [-0.24, -0.27, -0.01, -0.02],
+      "96": [-0.23, -0.25, -0.04, -0.02],
+      "86": [-0.21, -0.23, -0.04, -0.03],
+      "76": [-0.21, -0.22, -0.07, -0.05],
+      "66": [0.04, 0.08, 0.17, 0.19],
+      "65s": [-0.13, -0.15, -0.05, 0.0],
+      "64s": [-0.22, -0.16, -0.08, -0.05],
+      "63s": [-0.23, -0.18, -0.09, -0.07],
+      "62s": [-0.27, -0.26, -0.07, -0.08],
+      "A5": [-0.13, -0.09, -0.05, 0.02],
+      "K5": [-0.22, -0.23, -0.09, -0.07],
+      "Q5": [-0.24, -0.22, -0.06, -0.03],
+      "J5": [-0.24, -0.29, -0.06, -0.04],
+      "T5": [-0.24, -0.3, -0.04, -0.02],
+      "95": [-0.25, -0.28, -0.03, -0.02],
+      "85": [-0.23, -0.27, -0.03, -0.01],
+      "75": [-0.25, -0.26, -0.04, -0.03],
+      "65": [-0.25, -0.24, -0.08, -0.03],
+      "55": [0.0, -0.03, 0.09, 0.13],
+      "54s": [-0.16, -0.11, 0.0, -0.03],
+      "53s": [-0.2, -0.21, -0.09, -0.07],
+      "52s": [-0.25, -0.23, -0.11, -0.06],
+      "A4": [-0.15, -0.16, -0.08, -0.05],
+      "K4": [-0.22, -0.21, -0.06, -0.06],
+      "Q4": [-0.24, -0.27, -0.06, -0.05],
+      "J4": [-0.24, -0.28, -0.05, -0.03],
+      "T4": [-0.25, -0.3, -0.03, -0.02],
+      "94": [-0.25, -0.3, -0.03, -0.01],
+      "84": [-0.26, -0.29, -0.03, -0.01],
+      "74": [-0.25, -0.29, -0.03, -0.02],
+      "64": [-0.25, -0.28, -0.03, -0.02],
+      "54": [-0.25, -0.26, -0.06, -0.04],
+      "44": [-0.08, -0.1, 0.06, 0.04],
+      "43s": [-0.23, -0.2, -0.04, -0.08],
+      "42s": [-0.24, -0.23, -0.1, -0.09],
+      "A3": [-0.16, -0.18, -0.05, -0.06],
+      "K3": [-0.25, -0.26, -0.07, -0.05],
+      "Q3": [-0.23, -0.28, -0.06, -0.03],
+      "J3": [-0.26, -0.28, -0.05, -0.03],
+      "T3": [-0.26, -0.29, -0.03, -0.02],
+      "93": [-0.26, -0.31, -0.03, -0.01],
+      "83": [-0.25, -0.33, -0.03, -0.01],
+      "73": [-0.26, -0.32, -0.04, -0.01],
+      "63": [-0.25, -0.29, -0.03, -0.02],
+      "53": [-0.25, -0.28, -0.03, -0.03],
+      "43": [-0.26, -0.3, -0.04, -0.04],
+      "33": [-0.17, -0.17, -0.03, 0.04],
+      "32s": [-0.24, -0.29, -0.12, -0.08],
+      "A2": [-0.19, -0.19, -0.08, -0.04],
+      "K2": [-0.25, -0.26, -0.08, -0.07],
+      "Q2": [-0.25, -0.27, -0.07, -0.05],
+      "J2": [-0.25, -0.28, -0.06, -0.03],
+      "T2": [-0.25, -0.3, -0.03, -0.03],
+      "92": [-0.25, -0.32, -0.04, -0.01],
+      "82": [-0.26, -0.32, -0.03, -0.01],
+      "72": [-0.25, -0.33, -0.03, -0.01],
+      "62": [-0.25, -0.33, -0.03, -0.01],
+      "52": [-0.27, -0.32, -0.04, -0.02],
+      "42": [-0.26, -0.3, -0.04, -0.02],
+      "32": [-0.28, -0.32, -0.06, -0.04],
+      "22": [-0.17, -0.18, -0.12, -0.07]
     };
+    function actionForEv(ev) {
+      if (ev < 0) return "F";
+      return ev <= CALL_MAX_EV ? "C" : "R";
+    }
+    function fmtEv(v) {
+      return (v > 0 ? "+" : "") + v.toFixed(2);
+    }
+    // stats are tracked per hand AND position (ids look like "0-1-SB"); ids from
+    // the old single-chart version can't be mapped to a position, so drop them
+    function isPositionalId(id) {
+      return typeof id === "string" && id.split("-").length === 3;
+    }
+    function keepPositional(obj) {
+      return Object.fromEntries(Object.entries(obj || {}).filter(([k]) => isPositionalId(k)));
+    }
+
+    // "close call": EV within 2 cents of a cutoff (fold/call line at 0, call/raise line at 0.09)
+    const CLOSE_MARGIN = 0.02;
+    function isCloseCall(ev) {
+      return Math.abs(ev + 0.005) <= CLOSE_MARGIN || Math.abs(ev - 0.095) <= CLOSE_MARGIN;
+    }
+    // wrong answer, but only one step away from the right one on a close call -> counts as half a miss
+    function isNearMiss(action, hand) {
+      return action !== hand.action && isCloseCall(hand.ev) && Math.abs("FCR".indexOf(action) - "FCR".indexOf(hand.action)) === 1;
+    }
+    function actionCounts(position) {
+      const p = POSITIONS.indexOf(position);
+      const c = { R: 0, C: 0, F: 0 };
+      Object.values(EV_TABLE).forEach((v) => { c[actionForEv(v[p])] += 1; });
+      return c;
+    }
+    function positionInsights(history, handPool) {
+      const stats = history.handStats || {};
+      const mistakes = history.mistakes || {};
+      return POSITIONS.map((position) => {
+        let correct = 0, total = 0, mastered = 0, weakest = null, topMiss = null;
+        handPool.forEach((h) => {
+          if (h.position !== position) return;
+          const s = stats[h.id];
+          if (!s || !s.total) return;
+          correct += s.correct;
+          total += s.total;
+          if (isMastered(s)) mastered += 1;
+          if (s.total >= 3) {
+            const acc = s.correct / s.total;
+            if (!weakest || acc < weakest.acc) weakest = { notation: h.notation, acc, total: s.total };
+          }
+        });
+        Object.entries(mistakes).forEach(([k, n]) => {
+          const [pos, pair] = k.split(":");
+          if (pos !== position) return;
+          if (!topMiss || n > topMiss.n) {
+            const [chose, right] = pair.split(">");
+            topMiss = { n, chose, right };
+          }
+        });
+        return { position, correct, total, mastered, weakest, topMiss };
+      });
+    }
+
+    function StudyChart({ position, handStats, onSelectHand }) {
+      const p = POSITIONS.indexOf(position);
+      return (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(13, 1fr)", gap: 2 }}>
+          {RANKS.flatMap((r1, i) =>
+            RANKS.map((r2, j) => {
+              let category, notation;
+              if (i === j) { category = "pair"; notation = r1 + r1; }
+              else if (i < j) { category = "suited"; notation = r1 + r2 + "s"; }
+              else { category = "offsuit"; notation = r2 + r1; }
+              const ev = EV_TABLE[notation][p];
+              const action = actionForEv(ev);
+              const id = `${i}-${j}-${position}`;
+              const stat = handStats[id] || null;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => onSelectHand({ id, notation, category, action, position, ev, stat, mastered: isMastered(stat) })}
+                  style={{
+                    aspectRatio: "1 / 1", borderRadius: 3, border: "none", padding: 0, position: "relative",
+                    background: ACTION_BG[action], color: ACTION_TEXT[action], fontSize: 8, fontWeight: 600, lineHeight: 1, cursor: "pointer",
+                  }}
+                >
+                  {notation}
+                  {isCloseCall(ev) && (
+                    <span style={{ position: "absolute", top: 1, right: 1, width: 4, height: 4, borderRadius: "50%", background: "#fff" }} />
+                  )}
+                </button>
+              );
+            })
+          )}
+        </div>
+      );
+    }
+
 
     const CATEGORY_LABEL = { pair: "Pairs", suited: "Suited", offsuit: "Offsuit" };
     const ACTION_WORD = { R: "Raise", C: "Call", F: "Fold" };
@@ -295,7 +550,6 @@
         for (let j = 0; j < RANKS.length; j++) {
           const r1 = RANKS[i];
           const r2 = RANKS[j];
-          const action = ACTION_GRID[r1][j];
           let category, notation;
           if (i === j) {
             category = "pair";
@@ -307,7 +561,10 @@
             category = "offsuit";
             notation = r2 + r1;
           }
-          pool.push({ id: `${i}-${j}`, notation, category, action });
+          POSITIONS.forEach((position, p) => {
+            const ev = EV_TABLE[notation][p];
+            pool.push({ id: `${i}-${j}-${position}`, notation, category, position, ev, action: actionForEv(ev) });
+          });
         }
       }
       return pool;
@@ -343,11 +600,11 @@
     }
 
     function defaultHistory() {
-      return { runs: [], aggregate: emptyCatTotals(), difficulty: {}, handStats: {}, flawlessRuns: 0, pinnedMastery: null };
+      return { runs: [], aggregate: emptyCatTotals(), difficulty: {}, handStats: {}, flawlessRuns: 0, pinnedMastery: null, mistakes: {} };
     }
 
     function defaultSettings() {
-      return { autoAdvance: false, animationSpeed: "quick" };
+      return { autoAdvance: false, animationSpeed: "quick", positions: POSITIONS.slice() };
     }
 
     // Base (1x = "Relaxed") animation timings in ms; other presets scale these down
@@ -416,10 +673,10 @@
           return {
             ...defaultHistory(),
             ...parsed,
-            difficulty: parsed.difficulty || {},
-            handStats: parsed.handStats || {},
+            difficulty: keepPositional(parsed.difficulty),
+            handStats: keepPositional(parsed.handStats),
             flawlessRuns: parsed.flawlessRuns || 0,
-            pinnedMastery: parsed.pinnedMastery || null,
+            pinnedMastery: parsed.pinnedMastery && isPositionalId(parsed.pinnedMastery.id) ? parsed.pinnedMastery : null,
           };
         }
         return defaultHistory();
@@ -479,7 +736,7 @@
       return (
         <button
           onClick={onClick}
-          className="px-4 py-2 rounded-full text-sm font-medium transition"
+          className="px-3 py-2 rounded-full text-sm font-medium transition"
           style={{
             background: active ? CREAM : "rgba(246,239,221,0.12)",
             color: active ? INK : CREAM,
@@ -546,6 +803,18 @@
             {rank}
           </span>
           <span className={large ? "text-4xl leading-none mt-2" : "text-2xl leading-none mt-1"}>{suit}</span>
+        </div>
+      );
+    }
+
+    function PositionBadge({ position }) {
+      return (
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-xs" style={{ color: MUTED_CREAM }}>Position</span>
+          <span className="text-sm font-semibold px-3 py-1 rounded-full" style={{ background: GOLD, color: INK }}>
+            {position}
+          </span>
+          <span className="text-xs" style={{ color: MUTED_CREAM }}>{POSITION_LABEL[position]}</span>
         </div>
       );
     }
@@ -670,7 +939,7 @@
       };
     }
 
-    function AccuracyHeatmap({ handStats, onSelectHand }) {
+    function AccuracyHeatmap({ handStats, onSelectHand, position }) {
       // Pure inline styles throughout: this grid relies on precise column widths,
       // gaps, and an explicit aspect ratio, which can silently fail to render if
       // the host page doesn't compile Tailwind's arbitrary-value utilities
@@ -708,7 +977,7 @@
                   {r1}
                 </div>
                 {RANKS.map((r2, j) => {
-                  const id = `${i}-${j}`;
+                  const id = `${i}-${j}-${position}`;
                   const stat = handStats[id];
                   const acc = stat && stat.total ? stat.correct / stat.total : null;
                   const mastered = isMastered(stat);
@@ -723,7 +992,8 @@
                     category = "offsuit";
                     notation = r2 + r1;
                   }
-                  const action = ACTION_GRID[RANKS[i]][j];
+                  const ev = EV_TABLE[notation][POSITIONS.indexOf(position)];
+                  const action = actionForEv(ev);
                   return (
                     <button
                       key={id}
@@ -736,7 +1006,7 @@
                           : `${Math.round(acc * 100)}% (${stat.total} seen) — click for details`
                       }`}
                       onClick={() =>
-                        onSelectHand && onSelectHand({ id, notation, category, action, stat: stat || null, mastered })
+                        onSelectHand && onSelectHand({ id, notation, category, action, position, ev, stat: stat || null, mastered })
                       }
                       className={`heatmap-cell${mastered ? " mastered-cell" : ""}`}
                       style={{
@@ -876,7 +1146,7 @@
       }, [onClose]);
 
       if (!hand) return null;
-      const { notation, category, action, stat, mastered, suits } = hand;
+      const { notation, category, action, stat, mastered, suits, position, ev } = hand;
       const total = stat ? stat.total : 0;
       const correct = stat ? stat.correct : 0;
       const incorrect = total - correct;
@@ -921,7 +1191,7 @@
                 {notation}
               </p>
               <p className="text-xs mt-0.5" style={{ color: MUTED_CREAM }}>
-                {CATEGORY_LABEL[category]}
+                {CATEGORY_LABEL[category]} · {position} ({POSITION_LABEL[position]}) · EV {fmtEv(ev)}{isCloseCall(ev) ? " · close call" : ""}
               </p>
             </div>
 
@@ -1009,6 +1279,8 @@
       const [summary, setSummary] = useState(null);
       const [resetConfirm, setResetConfirm] = useState(false);
       const [inspectedHand, setInspectedHand] = useState(null); // { id, notation, category, action, stat, mastered, suits } | null
+      const [heatmapPos, setHeatmapPos] = useState(POSITIONS[0]);
+      const [studyPos, setStudyPos] = useState(POSITIONS[0]);
       const [settings, setSettings] = useState(defaultSettings());
       const [justMastered, setJustMastered] = useState(null); // { id, notation } | null
       const [masteryLock, setMasteryLock] = useState(false); // true while a just-crossed mastery is still "on screen"
@@ -1030,6 +1302,15 @@
       }, []);
 
       const durations = useMemo(() => durationsForSpeed(settings.animationSpeed), [settings.animationSpeed]);
+      const activePool = useMemo(
+        () => handPool.filter((h) => (settings.positions || POSITIONS).includes(h.position)),
+        [handPool, settings.positions]
+      );
+      const togglePosition = (p) => {
+        const cur = settings.positions || POSITIONS;
+        const next = cur.includes(p) ? cur.filter((x) => x !== p) : POSITIONS.filter((x) => cur.includes(x) || x === p);
+        if (next.length) updateSettings({ positions: next });
+      };
 
       // Holds "Next" back (both the button and auto-advance) for as long as the
       // mastery celebration plays, so a quick auto-advance or an eager click
@@ -1049,8 +1330,8 @@
       }, []);
 
       const startNewRun = useCallback(() => {
-        const pin = resolveMasteryPin(history.pinnedMastery, handPool, history.handStats);
-        const picks = buildDeck(handPool, history.difficulty, history.handStats, pin);
+        const pin = resolveMasteryPin(history.pinnedMastery, activePool, history.handStats);
+        const picks = buildDeck(activePool, history.difficulty, history.handStats, pin);
         setHistory((prev) => {
           const updated = { ...prev, pinnedMastery: pin };
           saveHistory(updated);
@@ -1073,20 +1354,21 @@
         setInspectedHand(null);
         setPhase("quiz");
         setActiveTab("quiz");
-      }, [handPool, history.difficulty, history.handStats, history.pinnedMastery]);
+      }, [activePool, history.difficulty, history.handStats, history.pinnedMastery]);
 
       useEffect(() => {
         let mounted = true;
         (async () => {
           const [h, s] = await Promise.all([loadHistory(), loadSettings()]);
           if (!mounted) return;
-          const pin = resolveMasteryPin(h.pinnedMastery, handPool, h.handStats);
+          const initPool = handPool.filter((x) => (s.positions || POSITIONS).includes(x.position));
+          const pin = resolveMasteryPin(h.pinnedMastery, initPool, h.handStats);
           const hWithPin = { ...h, pinnedMastery: pin };
           setHistory(hWithPin);
           saveHistory(hWithPin);
           setSettings(s);
           runLogRef.current = [];
-          setDeck(buildDeck(handPool, hWithPin.difficulty, hWithPin.handStats, pin));
+          setDeck(buildDeck(initPool, hWithPin.difficulty, hWithPin.handStats, pin));
           setIdx(0);
           setChosen(null);
           setPhase("quiz");
@@ -1104,9 +1386,13 @@
       const handleAnswer = (action) => {
         if (chosen || !currentHand) return;
         const correct = action === currentHand.action;
+        const near = isNearMiss(action, currentHand);
+        const mistakeKey = `${currentHand.position}:${action}>${currentHand.action}`;
         runLogRef.current.push({
           id: currentHand.id,
           notation: currentHand.notation,
+          position: currentHand.position,
+          near,
           category: currentHand.category,
           correctAction: currentHand.action,
           chosen: action,
@@ -1123,7 +1409,7 @@
         const prevStat = prevStats[currentHand.id];
         const wasMastered = isMastered(prevStat);
         const s = prevStat || { correct: 0, total: 0 };
-        const nextStat = { correct: s.correct + (correct ? 1 : 0), total: s.total + 1 };
+        const nextStat = { correct: s.correct + (correct ? 1 : near ? 0.5 : 0), total: s.total + 1 };
         const justCrossedMastery = correct && !wasMastered && isMastered(nextStat);
 
         // adjust this hand's invisible difficulty score, and its accuracy stats,
@@ -1133,12 +1419,13 @@
           const cur = prevDiff[currentHand.id] || 0;
           const nextDiff = correct
             ? Math.max(0, cur - DIFFICULTY_CORRECT_STEP)
-            : Math.min(DIFFICULTY_CAP, cur + DIFFICULTY_WRONG_STEP);
+            : Math.min(DIFFICULTY_CAP, cur + (near ? DIFFICULTY_WRONG_STEP / 2 : DIFFICULTY_WRONG_STEP));
 
           const updated = {
             ...prev,
             difficulty: { ...prevDiff, [currentHand.id]: nextDiff },
             handStats: { ...(prev.handStats || {}), [currentHand.id]: nextStat },
+            mistakes: correct ? prev.mistakes : { ...(prev.mistakes || {}), [mistakeKey]: ((prev.mistakes || {})[mistakeKey] || 0) + 1 },
           };
           saveHistory(updated);
           return updated;
@@ -1146,7 +1433,7 @@
 
         if (justCrossedMastery) {
           setJustMastered({ id: currentHand.id, notation: currentHand.notation });
-          masteredRunRef.current.push({ id: currentHand.id, notation: currentHand.notation });
+          masteredRunRef.current.push({ id: currentHand.id, notation: currentHand.notation, position: currentHand.position });
           armMasteryLock();
         }
       };
@@ -1206,6 +1493,7 @@
             id: a.id,
             notation: a.notation,
             category: a.category,
+            position: a.position,
             action: a.correctAction,
             suits: assignSuits(a.category),
           }));
@@ -1374,6 +1662,7 @@
             best = {
               id,
               notation: hand.notation,
+              position: hand.position,
               proximity,
               accuracy: handAccuracy(stat),
               attempts: stat.total,
@@ -1383,6 +1672,8 @@
         return best;
       }, [history.handStats, handPool]);
 
+      const insights = useMemo(() => positionInsights(history, handPool), [history.handStats, history.mistakes, handPool]);
+      const rated = insights.filter((r) => r.total >= 10).map((r) => ({ ...r, acc: r.correct / r.total })).sort((a, b) => a.acc - b.acc);
       const doReset = () => {
         if (!resetConfirm) {
           setResetConfirm(true);
@@ -1614,9 +1905,12 @@
                 Preflop range trainer
               </p>
             </div>
-            <nav className="flex gap-2">
+            <nav className="flex gap-1">
               <TabButton active={activeTab === "quiz"} onClick={() => setActiveTab("quiz")}>
                 Quiz
+              </TabButton>
+              <TabButton active={activeTab === "chart"} onClick={() => setActiveTab("chart")}>
+                Chart
               </TabButton>
               <TabButton active={activeTab === "history"} onClick={() => setActiveTab("history")}>
                 History
@@ -1696,6 +1990,7 @@
                           </div>
                         </>
                       )}
+                      <PositionBadge position={currentHand.position} />
                       <div className="flex gap-3 mb-5">
                         <MiniCard rank={currentHand.notation.replace("s", "")[0]} suit={currentHand.suits[0]} delay={-6} />
                         <MiniCard rank={currentHand.notation.replace("s", "")[1]} suit={currentHand.suits[1]} delay={6} />
@@ -1773,8 +2068,8 @@
                       )}
                       <span className="text-sm" style={{ color: CREAM }}>
                         {chosen === currentHand.action
-                          ? `Correct — ${ACTION_WORD[currentHand.action]} is right here.`
-                          : `Not quite. The chart says ${ACTION_WORD[currentHand.action]}.`}
+                          ? `Correct — ${ACTION_WORD[currentHand.action]} is right here (EV ${fmtEv(currentHand.ev)}).${isCloseCall(currentHand.ev) ? " Close call." : ""}`
+                          : `Not quite. The chart says ${ACTION_WORD[currentHand.action]} (EV ${fmtEv(currentHand.ev)}).${isCloseCall(currentHand.ev) ? (isNearMiss(chosen, currentHand) ? " Close call, so this counts as half a miss." : " It was a close call.") : ""}`}
                       </span>
                     </div>
                   </div>
@@ -1853,6 +2148,7 @@
                           <Check className="tick-pop" size={38} color="#7CD9AE" strokeWidth={3} />
                         </div>
                       )}
+                      <PositionBadge position={currentRedemption.position} />
                       <div className="flex gap-3 mb-5">
                         <MiniCard
                           rank={currentRedemption.notation.replace("s", "")[0]}
@@ -2065,7 +2361,7 @@
                           className="text-xs font-medium px-2 py-0.5 rounded-full"
                           style={{ background: MASTERED_PURPLE, color: "#241835" }}
                         >
-                          {m.notation}
+                          {m.notation}{m.position ? ` · ${m.position}` : ""}
                         </span>
                       ))}
                     </div>
@@ -2086,7 +2382,7 @@
                           className="text-sm font-semibold"
                           style={{ color: GOLD, fontFamily: "'Fraunces', serif" }}
                         >
-                          {nextClosestMastery.notation}
+                          {nextClosestMastery.notation} · {nextClosestMastery.position}
                         </span>
                         <span className="text-xs" style={{ color: MUTED_CREAM }}>
                           {Math.round(nextClosestMastery.proximity * 100)}% of the way there
@@ -2125,6 +2421,38 @@
                     View history
                   </button>
                 </div>
+              </div>
+            )}
+
+            {ready && activeTab === "chart" && (
+              <div>
+                <div className="flex gap-2 mb-3">
+                  {POSITIONS.map((p) => (
+                    <TabButton key={p} active={studyPos === p} onClick={() => setStudyPos(p)}>
+                      {p}
+                    </TabButton>
+                  ))}
+                </div>
+                <p className="text-xs mb-3" style={{ color: MUTED_CREAM }}>
+                  {POSITION_LABEL[studyPos]}. Tap a hand for details. A white dot marks a close call.
+                </p>
+                <div className="rounded-xl p-3 mb-3" style={{ background: "rgba(246,239,221,0.06)" }}>
+                  <StudyChart
+                    position={studyPos}
+                    handStats={history.handStats || {}}
+                    onSelectHand={(hand) => setInspectedHand({ ...hand, suits: assignSuits(hand.category) })}
+                  />
+                </div>
+                {(() => {
+                  const c = actionCounts(studyPos);
+                  return (
+                    <div className="flex gap-2 text-xs font-semibold">
+                      <span className="flex-1 text-center rounded-full py-1" style={{ background: RAISE_BG, color: CREAM }}>Raise {c.R}</span>
+                      <span className="flex-1 text-center rounded-full py-1" style={{ background: CALL_BG, color: CALL_TEXT }}>Call {c.C}</span>
+                      <span className="flex-1 text-center rounded-full py-1" style={{ background: FOLD_BG, color: CREAM }}>Fold {c.F}</span>
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
@@ -2182,6 +2510,42 @@
                   <CategoryTable overall={history.aggregate} last={lastRun ? lastRun.cats : null} />
                 </div>
 
+                <p className="text-sm mb-2" style={{ color: CREAM }}>By position</p>
+                {rated.length >= 2 && (
+                  <p className="text-xs mb-2" style={{ color: MUTED_CREAM }}>
+                    Weakest: {rated[0].position} ({Math.round(rated[0].acc * 100)}%) · Strongest: {rated[rated.length - 1].position} ({Math.round(rated[rated.length - 1].acc * 100)}%)
+                  </p>
+                )}
+                <div className="rounded-xl overflow-hidden mb-6" style={{ background: "rgba(246,239,221,0.06)" }}>
+                  {insights.map((r) => {
+                    const acc = pct(Math.round(r.correct * 2) / 2, r.total);
+                    return (
+                      <div key={r.position} className="px-4 py-3" style={{ borderBottom: "1px solid rgba(246,239,221,0.06)" }}>
+                        <div className="flex items-center justify-between text-sm" style={{ color: CREAM }}>
+                          <span>
+                            {r.position} <span className="text-xs" style={{ color: MUTED_CREAM }}>{POSITION_LABEL[r.position]}</span>
+                          </span>
+                          <span style={{ color: acc === null ? MUTED_CREAM : GOLD }}>{acc === null ? "—" : `${acc}%`}</span>
+                        </div>
+                        {acc !== null && (
+                          <div className="mt-2">
+                            <ProgressBar value={acc} max={100} />
+                            <p className="text-xs mt-1.5" style={{ color: MUTED_CREAM }}>
+                              {r.mastered} mastered · {r.total} answers
+                              {r.weakest ? ` · weakest ${r.weakest.notation} (${Math.round(r.weakest.acc * 100)}%)` : ""}
+                            </p>
+                            {r.topMiss && (
+                              <p className="text-xs mt-0.5" style={{ color: MUTED_CREAM }}>
+                                Most common miss: {ACTION_WORD[r.topMiss.chose]} instead of {ACTION_WORD[r.topMiss.right]} ({r.topMiss.n}×)
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
                 <p className="text-sm mb-2" style={{ color: CREAM }}>
                   Accuracy by hand
                 </p>
@@ -2189,7 +2553,15 @@
                   Tap any tile for the full breakdown on that hand.
                 </p>
                 <div className="rounded-xl p-3 mb-6" style={{ background: "rgba(246,239,221,0.06)" }}>
+                  <div className="flex gap-2 mb-3">
+                    {POSITIONS.map((p) => (
+                      <TabButton key={p} active={heatmapPos === p} onClick={() => setHeatmapPos(p)}>
+                        {p}
+                      </TabButton>
+                    ))}
+                  </div>
                   <AccuracyHeatmap
+                    position={heatmapPos}
                     handStats={history.handStats || {}}
                     onSelectHand={(hand) => setInspectedHand({ ...hand, suits: assignSuits(hand.category) })}
                   />
@@ -2297,6 +2669,27 @@
                           >
                             {preset.blurb}
                           </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl p-4 mb-4" style={{ background: "rgba(246,239,221,0.06)" }}>
+                  <p className="text-sm font-medium mb-1" style={{ color: CREAM }}>Positions to practice</p>
+                  <p className="text-xs mb-3" style={{ color: MUTED_CREAM }}>Applies from your next run. At least one stays on.</p>
+                  <div className="flex gap-2">
+                    {POSITIONS.map((p) => {
+                      const on = (settings.positions || POSITIONS).includes(p);
+                      return (
+                        <button
+                          key={p}
+                          onClick={() => togglePosition(p)}
+                          className="flex-1 rounded-xl py-2.5 flex flex-col items-center transition"
+                          style={{ background: on ? CREAM : "rgba(246,239,221,0.1)", color: on ? INK : CREAM }}
+                        >
+                          <span className="text-sm font-semibold">{p}</span>
+                          <span className="text-[10px] mt-0.5" style={{ color: on ? "rgba(32,36,31,0.65)" : MUTED_CREAM }}>{POSITION_LABEL[p]}</span>
                         </button>
                       );
                     })}
