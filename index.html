@@ -9,11 +9,11 @@
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone@7.26.0/babel.min.js"></script>
   <style>
-    /* Base felt background so the page never flashes white before React mounts */
+    /* Base background so the page never flashes white before React mounts */
     html, body, #root {
       min-height: 100%;
       margin: 0;
-      background: #0B241A;
+      background: #121418;
     }
   </style>
 </head>
@@ -122,7 +122,7 @@
     const POSITION_LABEL = { SB: "Small blind", BB: "Big blind", "3": "Seat 3", D: "Dealer" };
     const BANDS = {
       "SB": { raise: 0.36, call: 0 },
-      "BB": { raise: 0.11, call: 0.39 },
+      "BB": { raise: 0.11, call: 0, check: true },
       "3": { raise: 0.28, call: 0 },
       "D": { raise: 0.46, call: 0 }
     };
@@ -162,7 +162,7 @@
       const b = BANDS[position];
       if (pct <= b.raise + BAND_EPS) return "R";
       if (pct <= b.raise + b.call + BAND_EPS) return "C";
-      return "F";
+      return b.check ? "C" : "F";
     }
     function fmtPct(p) {
       const v = p * 100;
@@ -173,6 +173,7 @@
       const b = BANDS[position];
       const r = Math.round(b.raise * 100);
       const c = Math.round(b.call * 100);
+      if (b.check) return `${POSITION_LABEL[position]} raises its top ${r}% and checks the rest`;
       return c > 0
         ? `${POSITION_LABEL[position]} raises its top ${r}% and calls the next ${c}%`
         : `${POSITION_LABEL[position]} raises its top ${r}% and folds the rest`;
@@ -190,6 +191,7 @@
     const CLOSE_MARGIN = 0.02;
     function bandBoundaries(position) {
       const b = BANDS[position];
+      if (b.check) return [{ at: b.raise, a: "R", b: "C" }];
       return b.call > 0
         ? [{ at: b.raise, a: "R", b: "C" }, { at: b.raise + b.call, a: "C", b: "F" }]
         : [{ at: b.raise, a: "R", b: "F" }];
@@ -276,6 +278,7 @@
 
     const CATEGORY_LABEL = { pair: "Pairs", suited: "Suited", offsuit: "Offsuit" };
     const ACTION_WORD = { R: "Raise", C: "Call", F: "Fold" };
+    const actionWord = (a, position) => (a === "C" && BANDS[position] && BANDS[position].check ? "Check" : ACTION_WORD[a]);
     const HISTORY_KEY = "poker-history-v2"; // bumped when ranges moved to percentile bands: old stats no longer apply
     const SETTINGS_KEY = "poker-ev-settings-v1";
     const RUN_SIZE = 20;
@@ -427,7 +430,12 @@
           picks[replaceIdx] = pinnedHand;
         }
       }
-      return picks.map((h) => ({ ...h, suits: assignSuits(h.category) }));
+      // Remember the original random draw order (drawIdx), then group the run by
+      // position in SB -> BB -> 3 -> D order so you stay on one seat at a time.
+      // Array.sort is stable, so hands keep their random order within each group.
+      return picks
+        .map((h, i) => ({ ...h, drawIdx: i, suits: assignSuits(h.category) }))
+        .sort((a, b) => POSITIONS.indexOf(a.position) - POSITIONS.indexOf(b.position));
     }
 
     function buildHandPool() {
@@ -601,17 +609,17 @@
     }
 
     /* ------------------------------- palette -------------------------------- */
-    const FELT = "#123527";
-    const FELT_DEEP = "#0B241A";
-    const RAIL = "#5C3A22";
-    const CREAM = "#F6EFDD";
-    const INK = "#20241F";
-    const GOLD = "#CFA84B";
-    const RAISE_BG = "#2E8B63";
-    const CALL_BG = "#D7A73B";
-    const CALL_TEXT = "#2A2005";
-    const FOLD_BG = "#B8463B";
-    const MUTED_CREAM = "rgba(246,239,221,0.62)";
+    const FELT = "#17264A";
+    const FELT_DEEP = "#121418";
+    const RAIL = "#2A3550";
+    const CREAM = "#E8ECF4";
+    const INK = "#14161B";
+    const GOLD = "#8AB4FF";
+    const RAISE_BG = "#3D7BFF";
+    const CALL_BG = "#8793AB";
+    const CALL_TEXT = "#10131A";
+    const FOLD_BG = "#2A2F3A";
+    const MUTED_CREAM = "rgba(232,236,244,0.58)";
     const MASTERED_PURPLE = "#8B6FD1";
     const LAVENDER = "#C9AEF2";
     const REDEMPTION_ACCENT = "#4FB6C7";
@@ -624,7 +632,7 @@
           onClick={onClick}
           className="px-3 py-2 rounded-full text-sm font-medium transition"
           style={{
-            background: active ? CREAM : "rgba(246,239,221,0.12)",
+            background: active ? CREAM : "rgba(232,236,244,0.12)",
             color: active ? INK : CREAM,
           }}
         >
@@ -652,7 +660,7 @@
             style={{
               width: 34,
               height: 18,
-              background: checked ? GOLD : "rgba(246,239,221,0.2)",
+              background: checked ? GOLD : "rgba(232,236,244,0.2)",
             }}
           >
             <span
@@ -680,7 +688,7 @@
             width: large ? "8.5rem" : "5.5rem",
             height: large ? "11.5rem" : "7.5rem",
             background: CREAM,
-            border: `2px solid rgba(32,36,31,0.15)`,
+            border: `2px solid rgba(20,22,27,0.15)`,
             color: isRed ? "#A5342A" : INK,
             transform: `rotate(${delay}deg)`,
           }}
@@ -728,7 +736,7 @@
 
     function ProgressBar({ value, max }) {
       return (
-        <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(246,239,221,0.15)" }}>
+        <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(232,236,244,0.15)" }}>
           <div
             className="h-full rounded-full transition-all"
             style={{ width: `${(value / max) * 100}%`, background: GOLD }}
@@ -740,10 +748,10 @@
     function CategoryTable({ overall, last }) {
       const order = ["pair", "suited", "offsuit"];
       return (
-        <div className="rounded-xl overflow-hidden" style={{ background: "rgba(246,239,221,0.06)" }}>
+        <div className="rounded-xl overflow-hidden" style={{ background: "rgba(232,236,244,0.06)" }}>
           <div
             className="grid grid-cols-3 text-xs px-4 py-2"
-            style={{ color: MUTED_CREAM, borderBottom: "1px solid rgba(246,239,221,0.12)" }}
+            style={{ color: MUTED_CREAM, borderBottom: "1px solid rgba(232,236,244,0.12)" }}
           >
             <span>Category</span>
             <span className="text-right">Overall</span>
@@ -758,7 +766,7 @@
               <div
                 key={k}
                 className="grid grid-cols-3 items-center px-4 py-2.5 text-sm"
-                style={{ color: CREAM, borderBottom: "1px solid rgba(246,239,221,0.06)" }}
+                style={{ color: CREAM, borderBottom: "1px solid rgba(232,236,244,0.06)" }}
               >
                 <span>{CATEGORY_LABEL[k]}</span>
                 <span className="text-right" style={{ color: op === null ? MUTED_CREAM : CREAM }}>
@@ -794,7 +802,7 @@
     // its raw percentage, so mastered cards read as visually "done" at a glance.
     function colorForAccuracy(acc, mastered) {
       if (mastered) return MASTERED_PURPLE;
-      if (acc === null) return "rgba(246,239,221,0.12)";
+      if (acc === null) return "rgba(232,236,244,0.12)";
       if (acc < 0.5) return lerpColor(FOLD_BG, CALL_BG, acc / 0.5);
       return lerpColor(CALL_BG, RAISE_BG, (acc - 0.5) / 0.5);
     }
@@ -942,8 +950,8 @@
                 height: 10,
                 borderRadius: 2,
                 marginLeft: 12,
-                background: "rgba(246,239,221,0.12)",
-                border: "1px solid rgba(246,239,221,0.25)",
+                background: "rgba(232,236,244,0.12)",
+                border: "1px solid rgba(232,236,244,0.25)",
                 display: "inline-block",
               }}
             />
@@ -982,7 +990,7 @@
       const latest = data[data.length - 1];
 
       return (
-        <div className="rounded-xl p-3" style={{ background: "rgba(246,239,221,0.06)" }}>
+        <div className="rounded-xl p-3" style={{ background: "rgba(232,236,244,0.06)" }}>
           <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none">
             {[0, 25, 50, 75, 100].map((g) => (
               <g key={g}>
@@ -991,7 +999,7 @@
                   x2={W - PAD_R}
                   y1={yFor(g)}
                   y2={yFor(g)}
-                  stroke="rgba(246,239,221,0.1)"
+                  stroke="rgba(232,236,244,0.1)"
                   strokeWidth="1"
                 />
                 <text x={PAD_L - 5} y={yFor(g) + 3} textAnchor="end" fontSize="8" fill={MUTED_CREAM}>
@@ -1020,7 +1028,7 @@
        person is curious (or worried) about gets a proper close look.
     --------------------------------------------------------------------------- */
     const ACTION_BG = { R: RAISE_BG, C: CALL_BG, F: FOLD_BG };
-    const ACTION_TEXT = { R: CREAM, C: CALL_TEXT, F: CREAM };
+    const ACTION_TEXT = { R: "#ffffff", C: CALL_TEXT, F: "#8D96A8" };
 
     function HandInspectorModal({ hand, onClose }) {
       useEffect(() => {
@@ -1052,14 +1060,14 @@
         >
           <div
             className="hand-inspector-in w-full max-w-sm rounded-3xl p-6 relative"
-            style={{ background: FELT_DEEP, border: "1px solid rgba(246,239,221,0.14)" }}
+            style={{ background: FELT_DEEP, border: "1px solid rgba(232,236,244,0.14)" }}
             onClick={(e) => e.stopPropagation()}
           >
             <button
               onClick={onClose}
               aria-label="Close"
               className="absolute top-4 right-4 rounded-full p-1.5"
-              style={{ color: MUTED_CREAM, background: "rgba(246,239,221,0.08)" }}
+              style={{ color: MUTED_CREAM, background: "rgba(232,236,244,0.08)" }}
             >
               <X size={16} />
             </button>
@@ -1072,7 +1080,7 @@
             <div className="text-center mb-1">
               <p
                 className="text-3xl font-bold"
-                style={{ color: CREAM, fontFamily: "'Fraunces', serif" }}
+                style={{ color: CREAM, fontFamily: "'Inter', sans-serif" }}
               >
                 {notation}
               </p>
@@ -1089,7 +1097,7 @@
                 className="text-xs font-semibold px-2.5 py-1 rounded-full"
                 style={{ background: ACTION_BG[action], color: ACTION_TEXT[action] }}
               >
-                {ACTION_WORD[action]}
+                {actionWord(action, position)}
               </span>
               {mastered && (
                 <span
@@ -1108,29 +1116,29 @@
               </p>
             ) : (
               <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-2xl p-3" style={{ background: "rgba(246,239,221,0.06)" }}>
+                <div className="rounded-2xl p-3" style={{ background: "rgba(232,236,244,0.06)" }}>
                   <p className="text-xs mb-1" style={{ color: MUTED_CREAM }}>
                     Correct
                   </p>
-                  <p className="text-xl font-bold" style={{ color: "#7CD9AE", fontFamily: "'Fraunces', serif" }}>
+                  <p className="text-xl font-bold" style={{ color: "#7CD9AE", fontFamily: "'Inter', sans-serif" }}>
                     {accPct}%
                   </p>
                   <p className="text-xs mt-0.5" style={{ color: MUTED_CREAM }}>
                     {correct} of {total}
                   </p>
                 </div>
-                <div className="rounded-2xl p-3" style={{ background: "rgba(246,239,221,0.06)" }}>
+                <div className="rounded-2xl p-3" style={{ background: "rgba(232,236,244,0.06)" }}>
                   <p className="text-xs mb-1" style={{ color: MUTED_CREAM }}>
                     Incorrect
                   </p>
-                  <p className="text-xl font-bold" style={{ color: "#E2897E", fontFamily: "'Fraunces', serif" }}>
+                  <p className="text-xl font-bold" style={{ color: "#E2897E", fontFamily: "'Inter', sans-serif" }}>
                     {incorrectPct}%
                   </p>
                   <p className="text-xs mt-0.5" style={{ color: MUTED_CREAM }}>
                     {incorrect} of {total}
                   </p>
                 </div>
-                <div className="col-span-2 rounded-2xl p-3" style={{ background: "rgba(246,239,221,0.06)" }}>
+                <div className="col-span-2 rounded-2xl p-3" style={{ background: "rgba(232,236,244,0.06)" }}>
                   <p className="text-xs mb-1" style={{ color: MUTED_CREAM }}>
                     Mastery progress
                   </p>
@@ -1278,6 +1286,7 @@
           id: currentHand.id,
           notation: currentHand.notation,
           position: currentHand.position,
+          drawIdx: currentHand.drawIdx,
           near,
           category: currentHand.category,
           correctAction: currentHand.action,
@@ -1372,9 +1381,10 @@
         // redemption before the summary shows. This sits outside the run itself
         // — it never changes the score above, it only softens the mistake's
         // effect on that hand's ongoing accuracy/difficulty if corrected.
+        // (Judged by original draw order, not seat order, so grouping by position
+        // doesn't make redemption favour SB/BB.)
         const redemptionCandidates = log
-          .slice(0, REDEMPTION_WINDOW)
-          .filter((a) => !a.correct)
+          .filter((a) => a.drawIdx < REDEMPTION_WINDOW && !a.correct)
           .map((a) => ({
             id: a.id,
             notation: a.notation,
@@ -1474,7 +1484,7 @@
             if (!chosen) {
               if (k === "r") handleAnswer("R");
               else if (k === "c") handleAnswer("C");
-              else if (k === "f") handleAnswer("F");
+              else if (k === "f" && currentHand.position !== "BB") handleAnswer("F");
             } else if (k === "enter" || k === " " || k === "arrowright") {
               e.preventDefault();
               handleNext();
@@ -1483,7 +1493,7 @@
             if (!redemptionChosen) {
               if (k === "r") handleRedemptionAnswer("R");
               else if (k === "c") handleRedemptionAnswer("C");
-              else if (k === "f") handleRedemptionAnswer("F");
+              else if (k === "f" && currentRedemption.position !== "BB") handleRedemptionAnswer("F");
             } else if (k === "enter" || k === " " || k === "arrowright") {
               e.preventDefault();
               handleRedemptionNext();
@@ -1575,7 +1585,7 @@
         <div
           className="w-full min-h-screen flex flex-col items-center px-4 py-6"
           style={{
-            background: `radial-gradient(ellipse at top, ${FELT} 0%, ${FELT_DEEP} 78%)`,
+            background: `radial-gradient(ellipse 120% 60% at 50% 0%, ${FELT} 0%, ${FELT_DEEP} 70%)`,
             fontFamily: "'Inter', ui-sans-serif, system-ui, sans-serif",
             "--dur-deal": `${durations.deal}ms`,
             "--dur-shake": `${durations.shake}ms`,
@@ -1586,7 +1596,13 @@
           }}
         >
           <style>{`
-            @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+            html, body { font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+            h1, h2, p { letter-spacing: -0.01em; }
+            button { transition: transform 120ms ease-out, filter 120ms ease-out, background-color 120ms ease-out, opacity 120ms ease-out; }
+            button:not(:disabled):hover { filter: brightness(1.08); }
+            button:not(:disabled):active { transform: scale(0.97); }
+            button:focus-visible { outline: 2px solid ${GOLD}; outline-offset: 2px; }
             .deal-in { animation: dealIn var(--dur-deal, 240ms) ease-out; }
             @keyframes dealIn {
               from { opacity: 0; transform: translateY(6px) scale(0.98); }
@@ -1665,7 +1681,7 @@
             @keyframes notationFlash {
               0% { color: ${LAVENDER}; background: rgba(139,111,209,0.3); }
               70% { color: ${LAVENDER}; background: rgba(139,111,209,0.3); }
-              100% { color: ${GOLD}; background: rgba(246,239,221,0.1); }
+              100% { color: ${GOLD}; background: rgba(232,236,244,0.1); }
             }
 
             /* --- flawless-run celebration: a full run with zero mistakes --- */
@@ -1712,7 +1728,7 @@
             .heatmap-cell:hover, .heatmap-cell:focus-visible {
               transform: scale(1.22);
               z-index: 2;
-              box-shadow: 0 0 0 1px rgba(246,239,221,0.5), 0 4px 10px rgba(0,0,0,0.4);
+              box-shadow: 0 0 0 1px rgba(232,236,244,0.5), 0 4px 10px rgba(0,0,0,0.4);
               outline: none;
             }
 
@@ -1769,7 +1785,7 @@
               .mastered-glow { animation: none; box-shadow: none; }
               .mastered-burst .mastered-icon { animation: none; opacity: 0; }
               .mastered-ribbon { animation: none; opacity: 1; transform: translate(-50%, 0) scale(1); }
-              .notation-flash-mastered { animation: none; color: ${GOLD}; background: rgba(246,239,221,0.1); }
+              .notation-flash-mastered { animation: none; color: ${GOLD}; background: rgba(232,236,244,0.1); }
               .flawless-glow, .flawless-spark { animation: none; opacity: 0; }
               .flawless-trophy, .flawless-text { animation: none; opacity: 1; transform: none; }
               .mastered-cell::before, .mastered-cell::after { animation: none; opacity: 0; }
@@ -1783,7 +1799,7 @@
             <div>
               <h1
                 className="text-2xl font-semibold leading-none"
-                style={{ fontFamily: "'Fraunces', serif", color: CREAM }}
+                style={{ fontFamily: "'Inter', sans-serif", color: CREAM }}
               >
                 The Felt
               </h1>
@@ -1841,7 +1857,7 @@
                             ? chosen === currentHand.action
                               ? "rgba(124,217,174,0.55)"
                               : "rgba(226,137,126,0.55)"
-                            : "rgba(207,168,75,0.25)"
+                            : "rgba(138,180,255,0.25)"
                         }`,
                       }}
                     >
@@ -1885,7 +1901,7 @@
                         className={`px-5 py-1.5 rounded-full text-xl font-semibold tracking-wide ${
                           mastering ? "notation-flash-mastered" : ""
                         }`}
-                        style={{ background: "rgba(246,239,221,0.1)", color: GOLD, fontFamily: "'Fraunces', serif" }}
+                        style={{ background: "rgba(232,236,244,0.1)", color: GOLD, fontFamily: "'Inter', sans-serif" }}
                       >
                         {currentHand.notation}
                       </div>
@@ -1911,7 +1927,7 @@
                     }
                   />
                   <ChipButton
-                    label="Call"
+                    label={currentHand.position === "BB" ? "Check" : "Call"}
                     bg={CALL_BG}
                     textColor={CALL_TEXT}
                     disabled={!!chosen}
@@ -1926,7 +1942,8 @@
                         : "dim"
                     }
                   />
-                  <ChipButton
+                  {currentHand.position !== "BB" && (
+<ChipButton
                     label="Fold"
                     bg={FOLD_BG}
                     textColor="#ffffff"
@@ -1942,10 +1959,11 @@
                         : "dim"
                     }
                   />
+)}
                 </div>
 
                 {chosen && (
-                  <div className="flex items-center justify-between rounded-2xl px-4 py-3 mb-4" style={{ background: "rgba(246,239,221,0.08)" }}>
+                  <div className="flex items-center justify-between rounded-2xl px-4 py-3 mb-4" style={{ background: "rgba(232,236,244,0.08)" }}>
                     <div className="flex items-center gap-2">
                       {chosen === currentHand.action ? (
                         <Check size={18} color="#7CD9AE" />
@@ -1954,8 +1972,8 @@
                       )}
                       <span className="text-sm" style={{ color: CREAM }}>
                         {chosen === currentHand.action
-                          ? `Correct — ${ACTION_WORD[currentHand.action]} is right here (top ${fmtPct(currentHand.pct)} of hands; ${bandText(currentHand.position)}).${isCloseCall(currentHand.pct, currentHand.position) ? " Close call." : ""}`
-                          : `Not quite. The chart says ${ACTION_WORD[currentHand.action]} (top ${fmtPct(currentHand.pct)} of hands; ${bandText(currentHand.position)}).${isCloseCall(currentHand.pct, currentHand.position) ? (isNearMiss(chosen, currentHand) ? " Close call, so this counts as half a miss." : " It was a close call.") : ""}`}
+                          ? `Correct — ${actionWord(currentHand.action, currentHand.position)} is right here (top ${fmtPct(currentHand.pct)} of hands; ${bandText(currentHand.position)}).${isCloseCall(currentHand.pct, currentHand.position) ? " Close call." : ""}`
+                          : `Not quite. The chart says ${actionWord(currentHand.action, currentHand.position)} (top ${fmtPct(currentHand.pct)} of hands; ${bandText(currentHand.position)}).${isCloseCall(currentHand.pct, currentHand.position) ? (isNearMiss(chosen, currentHand) ? " Close call, so this counts as half a miss." : " It was a close call.") : ""}`}
                       </span>
                     </div>
                   </div>
@@ -2049,7 +2067,7 @@
                       </div>
                       <div
                         className="px-5 py-1.5 rounded-full text-xl font-semibold tracking-wide"
-                        style={{ background: "rgba(246,239,221,0.1)", color: GOLD, fontFamily: "'Fraunces', serif" }}
+                        style={{ background: "rgba(232,236,244,0.1)", color: GOLD, fontFamily: "'Inter', sans-serif" }}
                       >
                         {currentRedemption.notation}
                       </div>
@@ -2075,7 +2093,7 @@
                     }
                   />
                   <ChipButton
-                    label="Call"
+                    label={currentRedemption.position === "BB" ? "Check" : "Call"}
                     bg={CALL_BG}
                     textColor={CALL_TEXT}
                     disabled={!!redemptionChosen}
@@ -2090,7 +2108,8 @@
                         : "dim"
                     }
                   />
-                  <ChipButton
+                  {currentRedemption.position !== "BB" && (
+<ChipButton
                     label="Fold"
                     bg={FOLD_BG}
                     textColor="#ffffff"
@@ -2106,12 +2125,13 @@
                         : "dim"
                     }
                   />
+)}
                 </div>
 
                 {redemptionChosen && (
                   <div
                     className="flex items-center justify-between rounded-2xl px-4 py-3 mb-4"
-                    style={{ background: "rgba(246,239,221,0.08)" }}
+                    style={{ background: "rgba(232,236,244,0.08)" }}
                   >
                     <div className="flex items-center gap-2">
                       {redemptionChosen === currentRedemption.action ? (
@@ -2122,7 +2142,7 @@
                       <span className="text-sm" style={{ color: CREAM }}>
                         {redemptionChosen === currentRedemption.action
                           ? "Redeemed — that mistake's impact just got lighter."
-                          : `Not quite. The chart says ${ACTION_WORD[currentRedemption.action]}.`}
+                          : `Not quite. The chart says ${actionWord(currentRedemption.action, currentRedemption.position)}.`}
                       </span>
                     </div>
                   </div>
@@ -2156,7 +2176,7 @@
                         width: 150,
                         height: 150,
                         top: -20,
-                        background: `radial-gradient(circle, rgba(207,168,75,0.45), rgba(207,168,75,0) 70%)`,
+                        background: `radial-gradient(circle, rgba(138,180,255,0.45), rgba(138,180,255,0) 70%)`,
                       }}
                       aria-hidden="true"
                     />
@@ -2171,7 +2191,7 @@
                     <Trophy size={44} color={GOLD} className="flawless-trophy relative" />
                     <p
                       className="flawless-text text-sm font-bold tracking-widest mt-2 relative"
-                      style={{ color: GOLD, fontFamily: "'Fraunces', serif" }}
+                      style={{ color: GOLD, fontFamily: "'Inter', sans-serif" }}
                     >
                       FLAWLESS RUN
                     </p>
@@ -2179,10 +2199,10 @@
                 ) : (
                   <Trophy size={36} color={GOLD} className="mx-auto mb-3" />
                 )}
-                <h2 className="text-xl font-semibold mb-1" style={{ fontFamily: "'Fraunces', serif", color: CREAM }}>
+                <h2 className="text-xl font-semibold mb-1" style={{ fontFamily: "'Inter', sans-serif", color: CREAM }}>
                   Run complete
                 </h2>
-                <p className="text-4xl font-bold mb-1" style={{ color: GOLD, fontFamily: "'Fraunces', serif" }}>
+                <p className="text-4xl font-bold mb-1" style={{ color: GOLD, fontFamily: "'Inter', sans-serif" }}>
                   {summary.correct}/{summary.total}
                 </p>
                 <p className="text-sm mb-6" style={{ color: MUTED_CREAM }}>
@@ -2256,7 +2276,7 @@
 
                 <div
                   className="text-left rounded-2xl px-4 py-3 mb-6"
-                  style={{ background: "rgba(246,239,221,0.06)" }}
+                  style={{ background: "rgba(232,236,244,0.06)" }}
                 >
                   <p className="text-sm font-semibold mb-1" style={{ color: CREAM }}>
                     Next closest mastery
@@ -2266,7 +2286,7 @@
                       <div className="flex items-center justify-between mb-1.5">
                         <span
                           className="text-sm font-semibold"
-                          style={{ color: GOLD, fontFamily: "'Fraunces', serif" }}
+                          style={{ color: GOLD, fontFamily: "'Inter', sans-serif" }}
                         >
                           {nextClosestMastery.notation} · {nextClosestMastery.position}
                         </span>
@@ -2302,7 +2322,7 @@
                   <button
                     onClick={() => setActiveTab("history")}
                     className="flex-1 rounded-2xl py-3 font-medium"
-                    style={{ background: "rgba(246,239,221,0.12)", color: CREAM }}
+                    style={{ background: "rgba(232,236,244,0.12)", color: CREAM }}
                   >
                     View history
                   </button>
@@ -2322,7 +2342,7 @@
                 <p className="text-xs mb-3" style={{ color: MUTED_CREAM }}>
                   {POSITION_LABEL[studyPos]}. Tap a hand for details. A white dot marks a close call.
                 </p>
-                <div className="rounded-xl p-3 mb-3" style={{ background: "rgba(246,239,221,0.06)" }}>
+                <div className="rounded-xl p-3 mb-3" style={{ background: "rgba(232,236,244,0.06)" }}>
                   <StudyChart
                     position={studyPos}
                     handStats={history.handStats || {}}
@@ -2334,8 +2354,8 @@
                   return (
                     <div className="flex gap-2 text-xs font-semibold">
                       <span className="flex-1 text-center rounded-full py-1" style={{ background: RAISE_BG, color: CREAM }}>Raise {c.R}</span>
-                      <span className="flex-1 text-center rounded-full py-1" style={{ background: CALL_BG, color: CALL_TEXT }}>Call {c.C}</span>
-                      <span className="flex-1 text-center rounded-full py-1" style={{ background: FOLD_BG, color: CREAM }}>Fold {c.F}</span>
+                      <span className="flex-1 text-center rounded-full py-1" style={{ background: CALL_BG, color: CALL_TEXT }}>{studyPos === "BB" ? "Check" : "Call"} {c.C}</span>
+                      {studyPos !== "BB" && <span className="flex-1 text-center rounded-full py-1" style={{ background: FOLD_BG, color: CREAM }}>Fold {c.F}</span>}
                     </div>
                   );
                 })()}
@@ -2345,11 +2365,11 @@
             {ready && activeTab === "history" && (
               <div>
                 <div className="grid grid-cols-3 gap-3 mb-5">
-                  <div className="rounded-2xl p-4" style={{ background: "rgba(246,239,221,0.06)" }}>
+                  <div className="rounded-2xl p-4" style={{ background: "rgba(232,236,244,0.06)" }}>
                     <p className="text-xs mb-1" style={{ color: MUTED_CREAM }}>
                       Overall accuracy
                     </p>
-                    <p className="text-3xl font-bold" style={{ color: CREAM, fontFamily: "'Fraunces', serif" }}>
+                    <p className="text-3xl font-bold" style={{ color: CREAM, fontFamily: "'Inter', sans-serif" }}>
                       {overallPct === null ? "—" : `${overallPct}%`}
                     </p>
                     <p className="text-xs mt-1" style={{ color: MUTED_CREAM }}>
@@ -2357,23 +2377,23 @@
                       {["pair", "suited", "offsuit"].reduce((s, k) => s + history.aggregate[k].total, 0)} hands
                     </p>
                   </div>
-                  <div className="rounded-2xl p-4" style={{ background: "rgba(246,239,221,0.06)" }}>
+                  <div className="rounded-2xl p-4" style={{ background: "rgba(232,236,244,0.06)" }}>
                     <p className="text-xs mb-1" style={{ color: MUTED_CREAM }}>
                       Last run
                     </p>
-                    <p className="text-3xl font-bold" style={{ color: GOLD, fontFamily: "'Fraunces', serif" }}>
+                    <p className="text-3xl font-bold" style={{ color: GOLD, fontFamily: "'Inter', sans-serif" }}>
                       {lastRunPct === null ? "—" : `${lastRunPct}%`}
                     </p>
                     <p className="text-xs mt-1" style={{ color: MUTED_CREAM }}>
                       {lastRun ? `${lastRun.correct}/${lastRun.total} hands` : "No runs yet"}
                     </p>
                   </div>
-                  <div className="rounded-2xl p-4" style={{ background: "rgba(207,168,75,0.1)" }}>
+                  <div className="rounded-2xl p-4" style={{ background: "rgba(138,180,255,0.1)" }}>
                     <p className="text-xs mb-1 flex items-center gap-1" style={{ color: MUTED_CREAM }}>
                       <Trophy size={11} color={GOLD} />
                       Flawless runs
                     </p>
-                    <p className="text-3xl font-bold" style={{ color: GOLD, fontFamily: "'Fraunces', serif" }}>
+                    <p className="text-3xl font-bold" style={{ color: GOLD, fontFamily: "'Inter', sans-serif" }}>
                       {history.flawlessRuns || 0}
                     </p>
                     <p className="text-xs mt-1" style={{ color: MUTED_CREAM }}>
@@ -2402,11 +2422,11 @@
                     Weakest: {rated[0].position} ({Math.round(rated[0].acc * 100)}%) · Strongest: {rated[rated.length - 1].position} ({Math.round(rated[rated.length - 1].acc * 100)}%)
                   </p>
                 )}
-                <div className="rounded-xl overflow-hidden mb-6" style={{ background: "rgba(246,239,221,0.06)" }}>
+                <div className="rounded-xl overflow-hidden mb-6" style={{ background: "rgba(232,236,244,0.06)" }}>
                   {insights.map((r) => {
                     const acc = pct(Math.round(r.correct * 2) / 2, r.total);
                     return (
-                      <div key={r.position} className="px-4 py-3" style={{ borderBottom: "1px solid rgba(246,239,221,0.06)" }}>
+                      <div key={r.position} className="px-4 py-3" style={{ borderBottom: "1px solid rgba(232,236,244,0.06)" }}>
                         <div className="flex items-center justify-between text-sm" style={{ color: CREAM }}>
                           <span>
                             {r.position} <span className="text-xs" style={{ color: MUTED_CREAM }}>{POSITION_LABEL[r.position]}</span>
@@ -2422,7 +2442,7 @@
                             </p>
                             {r.topMiss && (
                               <p className="text-xs mt-0.5" style={{ color: MUTED_CREAM }}>
-                                Most common miss: {ACTION_WORD[r.topMiss.chose]} instead of {ACTION_WORD[r.topMiss.right]} ({r.topMiss.n}×)
+                                Most common miss: {actionWord(r.topMiss.chose, r.position)} instead of {actionWord(r.topMiss.right, r.position)} ({r.topMiss.n}×)
                               </p>
                             )}
                           </div>
@@ -2438,7 +2458,7 @@
                 <p className="text-xs mb-2" style={{ color: MUTED_CREAM }}>
                   Tap any tile for the full breakdown on that hand.
                 </p>
-                <div className="rounded-xl p-3 mb-6" style={{ background: "rgba(246,239,221,0.06)" }}>
+                <div className="rounded-xl p-3 mb-6" style={{ background: "rgba(232,236,244,0.06)" }}>
                   <div className="flex gap-2 mb-3">
                     {POSITIONS.map((p) => (
                       <TabButton key={p} active={heatmapPos === p} onClick={() => setHeatmapPos(p)}>
@@ -2456,7 +2476,7 @@
                 <p className="text-sm mb-2" style={{ color: CREAM }}>
                   Run log
                 </p>
-                <div className="rounded-xl overflow-hidden mb-6" style={{ background: "rgba(246,239,221,0.06)" }}>
+                <div className="rounded-xl overflow-hidden mb-6" style={{ background: "rgba(232,236,244,0.06)" }}>
                   {history.runs.length === 0 && (
                     <p className="text-sm px-4 py-4" style={{ color: MUTED_CREAM }}>
                       Finish a run to see it logged here.
@@ -2466,7 +2486,7 @@
                     <div
                       key={r.id}
                       className="flex items-center justify-between px-4 py-2.5 text-sm"
-                      style={{ color: CREAM, borderBottom: "1px solid rgba(246,239,221,0.06)" }}
+                      style={{ color: CREAM, borderBottom: "1px solid rgba(232,236,244,0.06)" }}
                     >
                       <span style={{ color: MUTED_CREAM }}>
                         {new Date(r.timestamp).toLocaleDateString(undefined, { month: "short", day: "numeric" })}{" "}
@@ -2476,7 +2496,7 @@
                         {r.flawless && (
                           <span
                             className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
-                            style={{ background: "rgba(207,168,75,0.18)", color: GOLD }}
+                            style={{ background: "rgba(138,180,255,0.18)", color: GOLD }}
                           >
                             Flawless
                           </span>
@@ -2498,7 +2518,7 @@
                   onBlur={() => setResetConfirm(false)}
                   className="w-full rounded-2xl py-3 flex items-center justify-center gap-2 text-sm font-medium"
                   style={{
-                    background: resetConfirm ? FOLD_BG : "rgba(246,239,221,0.1)",
+                    background: resetConfirm ? FOLD_BG : "rgba(232,236,244,0.1)",
                     color: resetConfirm ? "#ffffff" : CREAM,
                   }}
                 >
@@ -2510,7 +2530,7 @@
 
             {ready && activeTab === "settings" && (
               <div>
-                <div className="rounded-2xl p-4 mb-4" style={{ background: "rgba(246,239,221,0.06)" }}>
+                <div className="rounded-2xl p-4 mb-4" style={{ background: "rgba(232,236,244,0.06)" }}>
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium" style={{ color: CREAM }}>
@@ -2528,7 +2548,7 @@
                   </div>
                 </div>
 
-                <div className="rounded-2xl p-4 mb-4" style={{ background: "rgba(246,239,221,0.06)" }}>
+                <div className="rounded-2xl p-4 mb-4" style={{ background: "rgba(232,236,244,0.06)" }}>
                   <p className="text-sm font-medium mb-1" style={{ color: CREAM }}>
                     Animation speed
                   </p>
@@ -2544,14 +2564,14 @@
                           onClick={() => updateSettings({ animationSpeed: key })}
                           className="flex-1 rounded-xl py-2.5 px-2 flex flex-col items-center transition"
                           style={{
-                            background: active ? CREAM : "rgba(246,239,221,0.1)",
+                            background: active ? CREAM : "rgba(232,236,244,0.1)",
                             color: active ? INK : CREAM,
                           }}
                         >
                           <span className="text-sm font-semibold">{preset.label}</span>
                           <span
                             className="text-[10px] mt-0.5 text-center"
-                            style={{ color: active ? "rgba(32,36,31,0.65)" : MUTED_CREAM }}
+                            style={{ color: active ? "rgba(20,22,27,0.65)" : MUTED_CREAM }}
                           >
                             {preset.blurb}
                           </span>
@@ -2561,7 +2581,7 @@
                   </div>
                 </div>
 
-                <div className="rounded-2xl p-4 mb-4" style={{ background: "rgba(246,239,221,0.06)" }}>
+                <div className="rounded-2xl p-4 mb-4" style={{ background: "rgba(232,236,244,0.06)" }}>
                   <p className="text-sm font-medium mb-1" style={{ color: CREAM }}>Positions to practice</p>
                   <p className="text-xs mb-3" style={{ color: MUTED_CREAM }}>Applies from your next run. At least one stays on.</p>
                   <div className="flex gap-2">
@@ -2572,10 +2592,10 @@
                           key={p}
                           onClick={() => togglePosition(p)}
                           className="flex-1 rounded-xl py-2.5 flex flex-col items-center transition"
-                          style={{ background: on ? CREAM : "rgba(246,239,221,0.1)", color: on ? INK : CREAM }}
+                          style={{ background: on ? CREAM : "rgba(232,236,244,0.1)", color: on ? INK : CREAM }}
                         >
                           <span className="text-sm font-semibold">{p}</span>
-                          <span className="text-[10px] mt-0.5" style={{ color: on ? "rgba(32,36,31,0.65)" : MUTED_CREAM }}>{POSITION_LABEL[p]}</span>
+                          <span className="text-[10px] mt-0.5" style={{ color: on ? "rgba(20,22,27,0.65)" : MUTED_CREAM }}>{POSITION_LABEL[p]}</span>
                         </button>
                       );
                     })}
