@@ -110,193 +110,72 @@
     );
 
     /* ----------------------------------------------------------------------
-       DATA: the 13x13 preflop EV chart, encoded as raise/call/fold decisions.
-       Hands run A,K,Q,J,T,9,8,7,6,5,4,3,2; each hand has an EV per position.
+       DATA: 4-handed preflop ranges as percentile bands (100bb, equal stacks).
+       Source: 4handed_preflop_percentile_ranking.xlsx.
+       Every hand has a percentile (0-1, "top X%" of all 1,326 combos, ranked by
+       equity vs 3 random hands). Each seat raises its top `raise` share of hands,
+       calls the next `call` share, and folds the rest. To retune a seat, edit BANDS.
     ------------------------------------------------------------------------- */
     const RANKS = ["A", "K", "Q", "J", "T", "9", "8", "7", "6", "5", "4", "3", "2"];
 
-    /* Per-position EV table (columns: SB, BB, 3, D) from the uploaded spreadsheet.
-       Action rule: EV < 0 -> Fold, 0 <= EV <= 0.09 -> Call, EV > 0.09 -> Raise. */
     const POSITIONS = ["SB", "BB", "3", "D"];
     const POSITION_LABEL = { SB: "Small blind", BB: "Big blind", "3": "Seat 3", D: "Dealer" };
-    const CALL_MAX_EV = 0.09;
-    const EV_TABLE = {
-      "AA": [1.99, 1.97, 1.92, 2.1],
-      "AKs": [0.7, 0.72, 0.74, 0.76],
-      "AQs": [0.53, 0.49, 0.58, 0.8],
-      "AJs": [0.4, 0.39, 0.4, 0.6],
-      "ATs": [0.29, 0.25, 0.34, 0.54],
-      "A9s": [0.17, 0.14, 0.25, 0.33],
-      "A8s": [0.05, 0.12, 0.26, 0.2],
-      "A7s": [0.04, 0.08, 0.14, 0.19],
-      "A6s": [0.01, 0.07, 0.1, 0.19],
-      "A5s": [0.06, 0.06, 0.2, 0.12],
-      "A4s": [0.01, 0.02, 0.13, 0.13],
-      "A3s": [0.04, -0.01, 0.13, 0.12],
-      "A2s": [-0.04, -0.04, 0.06, 0.12],
-      "AK": [0.45, 0.47, 0.56, 0.61],
-      "KK": [1.52, 1.49, 1.55, 1.67],
-      "KQs": [0.28, 0.32, 0.41, 0.59],
-      "KJs": [0.31, 0.26, 0.35, 0.4],
-      "KTs": [0.17, 0.21, 0.29, 0.39],
-      "K9s": [0.11, 0.12, 0.22, 0.27],
-      "K8s": [0.0, 0.05, 0.03, 0.07],
-      "K7s": [-0.02, -0.04, 0.04, 0.1],
-      "K6s": [-0.1, -0.02, 0.07, 0.0],
-      "K5s": [-0.1, -0.1, 0.0, 0.04],
-      "K4s": [-0.08, -0.1, 0.04, -0.01],
-      "K3s": [-0.13, -0.11, -0.04, -0.01],
-      "K2s": [-0.08, -0.13, -0.06, 0.0],
-      "AQ": [0.31, 0.34, 0.41, 0.45],
-      "KQ": [0.23, 0.14, 0.26, 0.33],
-      "QQ": [1.2, 1.14, 1.18, 1.24],
-      "QJs": [0.22, 0.16, 0.31, 0.31],
-      "QTs": [0.12, 0.15, 0.28, 0.35],
-      "Q9s": [0.04, 0.04, 0.2, 0.21],
-      "Q8s": [-0.03, 0.01, 0.11, 0.08],
-      "Q7s": [-0.05, -0.08, 0.0, 0.1],
-      "Q6s": [-0.13, -0.07, 0.0, 0.01],
-      "Q5s": [-0.12, -0.19, -0.02, -0.03],
-      "Q4s": [-0.08, -0.08, -0.09, -0.08],
-      "Q3s": [-0.18, -0.18, 0.01, -0.02],
-      "Q2s": [-0.15, -0.15, -0.08, -0.06],
-      "AJ": [0.23, 0.25, 0.28, 0.38],
-      "KJ": [0.07, 0.07, 0.19, 0.26],
-      "QJ": [0.03, 0.05, 0.12, 0.19],
-      "JJ": [0.89, 0.87, 0.92, 1.04],
-      "JTs": [0.07, 0.14, 0.21, 0.25],
-      "J9s": [0.05, 0.0, 0.09, 0.16],
-      "J8s": [-0.07, -0.04, 0.04, 0.08],
-      "J7s": [-0.09, -0.07, -0.01, 0.06],
-      "J6s": [-0.19, -0.15, -0.04, -0.04],
-      "J5s": [-0.13, -0.16, -0.07, 0.0],
-      "J4s": [-0.18, -0.18, -0.06, -0.05],
-      "J3s": [-0.21, -0.16, -0.12, -0.04],
-      "J2s": [-0.19, -0.24, -0.07, -0.06],
-      "AT": [0.1, 0.12, 0.19, 0.31],
-      "KT": [-0.01, 0.06, 0.11, 0.14],
-      "QT": [-0.04, -0.01, 0.09, 0.14],
-      "JT": [-0.02, -0.04, 0.1, 0.14],
-      "TT": [0.65, 0.69, 0.79, 0.83],
-      "T9s": [-0.01, 0.05, 0.16, 0.26],
-      "T8s": [-0.04, -0.04, 0.08, 0.13],
-      "T7s": [-0.07, -0.08, 0.07, 0.1],
-      "T6s": [-0.14, -0.17, -0.06, 0.0],
-      "T5s": [-0.19, -0.22, -0.06, -0.06],
-      "T4s": [-0.25, -0.18, -0.06, -0.03],
-      "T3s": [-0.23, -0.25, -0.08, -0.05],
-      "T2s": [-0.21, -0.22, -0.06, -0.06],
-      "A9": [0.0, 0.01, 0.07, 0.15],
-      "K9": [-0.1, -0.09, 0.02, 0.04],
-      "Q9": [-0.06, -0.14, -0.01, 0.07],
-      "J9": [-0.1, -0.14, -0.02, 0.01],
-      "T9": [-0.13, -0.13, 0.0, 0.05],
-      "99": [0.44, 0.47, 0.59, 0.64],
-      "98s": [-0.06, 0.03, 0.09, 0.12],
-      "97s": [-0.13, -0.07, 0.0, 0.06],
-      "96s": [-0.2, -0.15, -0.04, -0.04],
-      "95s": [-0.2, -0.2, -0.09, -0.05],
-      "94s": [-0.21, -0.2, -0.09, -0.06],
-      "93s": [-0.25, -0.24, -0.05, -0.09],
-      "92s": [-0.16, -0.24, -0.1, -0.06],
-      "A8": [-0.09, 0.0, 0.01, 0.08],
-      "K8": [-0.17, -0.16, -0.04, -0.03],
-      "Q8": [-0.18, -0.16, -0.05, -0.01],
-      "J8": [-0.19, -0.16, -0.07, -0.03],
-      "T8": [-0.15, -0.19, -0.04, 0.01],
-      "98": [-0.15, -0.15, -0.06, -0.04],
-      "88": [0.29, 0.28, 0.37, 0.5],
-      "87s": [-0.11, -0.04, 0.12, 0.08],
-      "86s": [-0.17, -0.07, -0.04, 0.05],
-      "85s": [-0.16, -0.17, -0.09, 0.0],
-      "84s": [-0.2, -0.18, -0.08, -0.04],
-      "83s": [-0.25, -0.22, -0.11, -0.08],
-      "82s": [-0.27, -0.22, -0.1, -0.08],
-      "A7": [-0.11, -0.06, -0.02, 0.06],
-      "K7": [-0.16, -0.16, -0.05, -0.04],
-      "Q7": [-0.2, -0.18, -0.07, -0.03],
-      "J7": [-0.22, -0.25, -0.05, -0.05],
-      "T7": [-0.2, -0.22, -0.05, -0.01],
-      "97": [-0.21, -0.2, -0.03, -0.02],
-      "87": [-0.2, -0.19, -0.07, -0.03],
-      "77": [0.15, 0.16, 0.33, 0.36],
-      "76s": [-0.11, -0.04, 0.02, 0.05],
-      "75s": [-0.18, -0.18, -0.08, -0.01],
-      "74s": [-0.2, -0.16, -0.07, -0.08],
-      "73s": [-0.25, -0.25, -0.1, -0.07],
-      "72s": [-0.28, -0.24, -0.13, -0.06],
-      "A6": [-0.12, -0.15, -0.03, 0.01],
-      "K6": [-0.18, -0.18, -0.07, -0.05],
-      "Q6": [-0.21, -0.23, -0.07, -0.04],
-      "J6": [-0.23, -0.26, -0.05, -0.03],
-      "T6": [-0.24, -0.27, -0.01, -0.02],
-      "96": [-0.23, -0.25, -0.04, -0.02],
-      "86": [-0.21, -0.23, -0.04, -0.03],
-      "76": [-0.21, -0.22, -0.07, -0.05],
-      "66": [0.04, 0.08, 0.17, 0.19],
-      "65s": [-0.13, -0.15, -0.05, 0.0],
-      "64s": [-0.22, -0.16, -0.08, -0.05],
-      "63s": [-0.23, -0.18, -0.09, -0.07],
-      "62s": [-0.27, -0.26, -0.07, -0.08],
-      "A5": [-0.13, -0.09, -0.05, 0.02],
-      "K5": [-0.22, -0.23, -0.09, -0.07],
-      "Q5": [-0.24, -0.22, -0.06, -0.03],
-      "J5": [-0.24, -0.29, -0.06, -0.04],
-      "T5": [-0.24, -0.3, -0.04, -0.02],
-      "95": [-0.25, -0.28, -0.03, -0.02],
-      "85": [-0.23, -0.27, -0.03, -0.01],
-      "75": [-0.25, -0.26, -0.04, -0.03],
-      "65": [-0.25, -0.24, -0.08, -0.03],
-      "55": [0.0, -0.03, 0.09, 0.13],
-      "54s": [-0.16, -0.11, 0.0, -0.03],
-      "53s": [-0.2, -0.21, -0.09, -0.07],
-      "52s": [-0.25, -0.23, -0.11, -0.06],
-      "A4": [-0.15, -0.16, -0.08, -0.05],
-      "K4": [-0.22, -0.21, -0.06, -0.06],
-      "Q4": [-0.24, -0.27, -0.06, -0.05],
-      "J4": [-0.24, -0.28, -0.05, -0.03],
-      "T4": [-0.25, -0.3, -0.03, -0.02],
-      "94": [-0.25, -0.3, -0.03, -0.01],
-      "84": [-0.26, -0.29, -0.03, -0.01],
-      "74": [-0.25, -0.29, -0.03, -0.02],
-      "64": [-0.25, -0.28, -0.03, -0.02],
-      "54": [-0.25, -0.26, -0.06, -0.04],
-      "44": [-0.08, -0.1, 0.06, 0.04],
-      "43s": [-0.23, -0.2, -0.04, -0.08],
-      "42s": [-0.24, -0.23, -0.1, -0.09],
-      "A3": [-0.16, -0.18, -0.05, -0.06],
-      "K3": [-0.25, -0.26, -0.07, -0.05],
-      "Q3": [-0.23, -0.28, -0.06, -0.03],
-      "J3": [-0.26, -0.28, -0.05, -0.03],
-      "T3": [-0.26, -0.29, -0.03, -0.02],
-      "93": [-0.26, -0.31, -0.03, -0.01],
-      "83": [-0.25, -0.33, -0.03, -0.01],
-      "73": [-0.26, -0.32, -0.04, -0.01],
-      "63": [-0.25, -0.29, -0.03, -0.02],
-      "53": [-0.25, -0.28, -0.03, -0.03],
-      "43": [-0.26, -0.3, -0.04, -0.04],
-      "33": [-0.17, -0.17, -0.03, 0.04],
-      "32s": [-0.24, -0.29, -0.12, -0.08],
-      "A2": [-0.19, -0.19, -0.08, -0.04],
-      "K2": [-0.25, -0.26, -0.08, -0.07],
-      "Q2": [-0.25, -0.27, -0.07, -0.05],
-      "J2": [-0.25, -0.28, -0.06, -0.03],
-      "T2": [-0.25, -0.3, -0.03, -0.03],
-      "92": [-0.25, -0.32, -0.04, -0.01],
-      "82": [-0.26, -0.32, -0.03, -0.01],
-      "72": [-0.25, -0.33, -0.03, -0.01],
-      "62": [-0.25, -0.33, -0.03, -0.01],
-      "52": [-0.27, -0.32, -0.04, -0.02],
-      "42": [-0.26, -0.3, -0.04, -0.02],
-      "32": [-0.28, -0.32, -0.06, -0.04],
-      "22": [-0.17, -0.18, -0.12, -0.07]
+    const BANDS = {
+      "SB": { raise: 0.36, call: 0 },
+      "BB": { raise: 0.11, call: 0.39 },
+      "3": { raise: 0.28, call: 0 },
+      "D": { raise: 0.46, call: 0 }
     };
-    function actionForEv(ev) {
-      if (ev < 0) return "F";
-      return ev <= CALL_MAX_EV ? "C" : "R";
+    const HAND_PCT = {
+      "AA": 0.002262, "KK": 0.006787, "QQ": 0.011312, "JJ": 0.015837, "TT": 0.020362, "AKs": 0.024133,
+      "99": 0.027903, "AQs": 0.031674, "AJs": 0.034691, "AK": 0.040724, "KQs": 0.046757, "88": 0.050528,
+      "ATs": 0.054299, "AQ": 0.060332, "KJs": 0.066365, "KTs": 0.069382, "QJs": 0.072398, "KQ": 0.078431,
+      "AJ": 0.087481, "77": 0.094268, "A9s": 0.098039, "QTs": 0.101056, "AT": 0.107089, "KJ": 0.116139,
+      "JTs": 0.122172, "A8s": 0.125189, "K9s": 0.128205, "A7s": 0.131222, "KT": 0.137255, "QJ": 0.146305,
+      "Q9s": 0.152338, "A5s": 0.155354, "66": 0.159125, "J9s": 0.162896, "QT": 0.168929, "A6s": 0.174962,
+      "A9": 0.180995, "A4s": 0.187029, "T9s": 0.190045, "K8s": 0.193062, "JT": 0.199095, "A3s": 0.205128,
+      "A8": 0.211161, "K7s": 0.217195, "Q8s": 0.220211, "K9": 0.226244, "A2s": 0.232278, "T8s": 0.235294,
+      "55": 0.239065, "J8s": 0.242836, "K6s": 0.245852, "A7": 0.251885, "98s": 0.257919, "K5s": 0.260935,
+      "Q9": 0.266968, "A5": 0.276018, "T9": 0.285068, "J9": 0.294118, "Q7s": 0.300151, "K4s": 0.303167,
+      "A6": 0.309201, "A4": 0.31825, "K8": 0.3273, "K3s": 0.333333, "Q6s": 0.33635, "J7s": 0.339367,
+      "97s": 0.342383, "T7s": 0.3454, "87s": 0.348416, "A3": 0.354449, "44": 0.361237, "K7": 0.368024,
+      "Q8": 0.377074, "Q5s": 0.383107, "K2s": 0.386124, "J8": 0.392157, "A2": 0.401207, "Q4s": 0.40724,
+      "T8": 0.413273, "J6s": 0.419306, "K6": 0.425339, "T6s": 0.431373, "76s": 0.434389, "96s": 0.437406,
+      "Q3s": 0.440422, "86s": 0.443439, "J5s": 0.446456, "98": 0.452489, "K5": 0.461538, "Q2s": 0.467572,
+      "Q7": 0.473605, "33": 0.480392, "J4s": 0.484163, "65s": 0.487179, "K4": 0.493213, "T5s": 0.499246,
+      "75s": 0.502262, "87": 0.508296, "T7": 0.517345, "J7": 0.526395, "95s": 0.532428, "85s": 0.535445,
+      "97": 0.541478, "Q6": 0.550528, "J3s": 0.556561, "54s": 0.559578, "K3": 0.565611, "T4s": 0.571644,
+      "J2s": 0.574661, "Q5": 0.580694, "64s": 0.586727, "K2": 0.59276, "T3s": 0.598793, "22": 0.602564,
+      "74s": 0.606335, "76": 0.612368, "86": 0.621418, "J6": 0.630468, "Q4": 0.639517, "T2s": 0.645551,
+      "84s": 0.648567, "96": 0.6546, "94s": 0.660633, "T6": 0.666667, "53s": 0.6727, "J5": 0.678733,
+      "Q3": 0.687783, "63s": 0.693816, "93s": 0.696833, "43s": 0.699849, "92s": 0.702866, "73s": 0.705882,
+      "J4": 0.711916, "Q2": 0.720965, "65": 0.730015, "83s": 0.736048, "75": 0.742081, "52s": 0.748115,
+      "82s": 0.751131, "T5": 0.757164, "85": 0.766214, "J3": 0.775264, "54": 0.784314, "T4": 0.793363,
+      "42s": 0.799397, "95": 0.80543, "J2": 0.81448, "62s": 0.820513, "72s": 0.823529, "64": 0.829563,
+      "32s": 0.835596, "74": 0.841629, "T3": 0.850679, "84": 0.859729, "53": 0.868778, "T2": 0.877828,
+      "94": 0.886878, "93": 0.895928, "63": 0.904977, "43": 0.914027, "92": 0.923077, "73": 0.932127,
+      "83": 0.941176, "52": 0.950226, "82": 0.959276, "62": 0.968326, "42": 0.977376, "72": 0.986425,
+      "32": 0.995475
+    };
+    const BAND_EPS = 1e-9;
+    function actionForPct(pct, position) {
+      const b = BANDS[position];
+      if (pct <= b.raise + BAND_EPS) return "R";
+      if (pct <= b.raise + b.call + BAND_EPS) return "C";
+      return "F";
     }
-    function fmtEv(v) {
-      return (v > 0 ? "+" : "") + v.toFixed(2);
+    function fmtPct(p) {
+      const v = p * 100;
+      return (v < 10 ? v.toFixed(1) : String(Math.round(v))) + "%";
+    }
+    // e.g. "Seat 3 raises its top 28%" / "Big blind raises its top 11% and calls the next 39%"
+    function bandText(position) {
+      const b = BANDS[position];
+      const r = Math.round(b.raise * 100);
+      const c = Math.round(b.call * 100);
+      return c > 0
+        ? `${POSITION_LABEL[position]} raises its top ${r}% and calls the next ${c}%`
+        : `${POSITION_LABEL[position]} raises its top ${r}% and folds the rest`;
     }
     // stats are tracked per hand AND position (ids look like "0-1-SB"); ids from
     // the old single-chart version can't be mapped to a position, so drop them
@@ -307,19 +186,27 @@
       return Object.fromEntries(Object.entries(obj || {}).filter(([k]) => isPositionalId(k)));
     }
 
-    // "close call": EV within 2 cents of a cutoff (fold/call line at 0, call/raise line at 0.09)
+    // "close call": percentile within 2 points of a raise/call/fold cutoff for that seat
     const CLOSE_MARGIN = 0.02;
-    function isCloseCall(ev) {
-      return Math.abs(ev + 0.005) <= CLOSE_MARGIN || Math.abs(ev - 0.095) <= CLOSE_MARGIN;
+    function bandBoundaries(position) {
+      const b = BANDS[position];
+      return b.call > 0
+        ? [{ at: b.raise, a: "R", b: "C" }, { at: b.raise + b.call, a: "C", b: "F" }]
+        : [{ at: b.raise, a: "R", b: "F" }];
     }
-    // wrong answer, but only one step away from the right one on a close call -> counts as half a miss
+    function isCloseCall(pct, position) {
+      return bandBoundaries(position).some((x) => Math.abs(pct - x.at) <= CLOSE_MARGIN);
+    }
+    // wrong answer, but it's the action on the other side of a cutoff the hand sits next to -> half a miss
     function isNearMiss(action, hand) {
-      return action !== hand.action && isCloseCall(hand.ev) && Math.abs("FCR".indexOf(action) - "FCR".indexOf(hand.action)) === 1;
+      if (action === hand.action) return false;
+      return bandBoundaries(hand.position).some((x) =>
+        Math.abs(hand.pct - x.at) <= CLOSE_MARGIN &&
+        ((x.a === hand.action && x.b === action) || (x.b === hand.action && x.a === action)));
     }
     function actionCounts(position) {
-      const p = POSITIONS.indexOf(position);
       const c = { R: 0, C: 0, F: 0 };
-      Object.values(EV_TABLE).forEach((v) => { c[actionForEv(v[p])] += 1; });
+      Object.values(HAND_PCT).forEach((p) => { c[actionForPct(p, position)] += 1; });
       return c;
     }
     function positionInsights(history, handPool) {
@@ -352,7 +239,6 @@
     }
 
     function StudyChart({ position, handStats, onSelectHand }) {
-      const p = POSITIONS.indexOf(position);
       return (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(13, 1fr)", gap: 2 }}>
           {RANKS.flatMap((r1, i) =>
@@ -361,22 +247,22 @@
               if (i === j) { category = "pair"; notation = r1 + r1; }
               else if (i < j) { category = "suited"; notation = r1 + r2 + "s"; }
               else { category = "offsuit"; notation = r2 + r1; }
-              const ev = EV_TABLE[notation][p];
-              const action = actionForEv(ev);
+              const pct = HAND_PCT[notation];
+              const action = actionForPct(pct, position);
               const id = `${i}-${j}-${position}`;
               const stat = handStats[id] || null;
               return (
                 <button
                   key={id}
                   type="button"
-                  onClick={() => onSelectHand({ id, notation, category, action, position, ev, stat, mastered: isMastered(stat) })}
+                  onClick={() => onSelectHand({ id, notation, category, action, position, pct, stat, mastered: isMastered(stat) })}
                   style={{
                     aspectRatio: "1 / 1", borderRadius: 3, border: "none", padding: 0, position: "relative",
                     background: ACTION_BG[action], color: ACTION_TEXT[action], fontSize: 8, fontWeight: 600, lineHeight: 1, cursor: "pointer",
                   }}
                 >
                   {notation}
-                  {isCloseCall(ev) && (
+                  {isCloseCall(pct, position) && (
                     <span style={{ position: "absolute", top: 1, right: 1, width: 4, height: 4, borderRadius: "50%", background: "#fff" }} />
                   )}
                 </button>
@@ -390,7 +276,7 @@
 
     const CATEGORY_LABEL = { pair: "Pairs", suited: "Suited", offsuit: "Offsuit" };
     const ACTION_WORD = { R: "Raise", C: "Call", F: "Fold" };
-    const HISTORY_KEY = "poker-ev-history-v1";
+    const HISTORY_KEY = "poker-history-v2"; // bumped when ranges moved to percentile bands: old stats no longer apply
     const SETTINGS_KEY = "poker-ev-settings-v1";
     const RUN_SIZE = 20;
     const REDEMPTION_WINDOW = 10; // mistakes in hands 1-10 get a shot at redemption after the run
@@ -562,8 +448,8 @@
             notation = r2 + r1;
           }
           POSITIONS.forEach((position, p) => {
-            const ev = EV_TABLE[notation][p];
-            pool.push({ id: `${i}-${j}-${position}`, notation, category, position, ev, action: actionForEv(ev) });
+            const pct = HAND_PCT[notation];
+            pool.push({ id: `${i}-${j}-${position}`, notation, category, position, pct, action: actionForPct(pct, position) });
           });
         }
       }
@@ -992,8 +878,8 @@
                     category = "offsuit";
                     notation = r2 + r1;
                   }
-                  const ev = EV_TABLE[notation][POSITIONS.indexOf(position)];
-                  const action = actionForEv(ev);
+                  const pct = HAND_PCT[notation];
+                  const action = actionForPct(pct, position);
                   return (
                     <button
                       key={id}
@@ -1006,7 +892,7 @@
                           : `${Math.round(acc * 100)}% (${stat.total} seen) — click for details`
                       }`}
                       onClick={() =>
-                        onSelectHand && onSelectHand({ id, notation, category, action, position, ev, stat: stat || null, mastered })
+                        onSelectHand && onSelectHand({ id, notation, category, action, position, pct, stat: stat || null, mastered })
                       }
                       className={`heatmap-cell${mastered ? " mastered-cell" : ""}`}
                       style={{
@@ -1146,7 +1032,7 @@
       }, [onClose]);
 
       if (!hand) return null;
-      const { notation, category, action, stat, mastered, suits, position, ev } = hand;
+      const { notation, category, action, stat, mastered, suits, position, pct } = hand;
       const total = stat ? stat.total : 0;
       const correct = stat ? stat.correct : 0;
       const incorrect = total - correct;
@@ -1191,7 +1077,7 @@
                 {notation}
               </p>
               <p className="text-xs mt-0.5" style={{ color: MUTED_CREAM }}>
-                {CATEGORY_LABEL[category]} · {position} ({POSITION_LABEL[position]}) · EV {fmtEv(ev)}{isCloseCall(ev) ? " · close call" : ""}
+                {CATEGORY_LABEL[category]} · {position} ({POSITION_LABEL[position]}) · Top {fmtPct(pct)}{isCloseCall(pct, position) ? " · close call" : ""}
               </p>
             </div>
 
@@ -2068,8 +1954,8 @@
                       )}
                       <span className="text-sm" style={{ color: CREAM }}>
                         {chosen === currentHand.action
-                          ? `Correct — ${ACTION_WORD[currentHand.action]} is right here (EV ${fmtEv(currentHand.ev)}).${isCloseCall(currentHand.ev) ? " Close call." : ""}`
-                          : `Not quite. The chart says ${ACTION_WORD[currentHand.action]} (EV ${fmtEv(currentHand.ev)}).${isCloseCall(currentHand.ev) ? (isNearMiss(chosen, currentHand) ? " Close call, so this counts as half a miss." : " It was a close call.") : ""}`}
+                          ? `Correct — ${ACTION_WORD[currentHand.action]} is right here (top ${fmtPct(currentHand.pct)} of hands; ${bandText(currentHand.position)}).${isCloseCall(currentHand.pct, currentHand.position) ? " Close call." : ""}`
+                          : `Not quite. The chart says ${ACTION_WORD[currentHand.action]} (top ${fmtPct(currentHand.pct)} of hands; ${bandText(currentHand.position)}).${isCloseCall(currentHand.pct, currentHand.position) ? (isNearMiss(chosen, currentHand) ? " Close call, so this counts as half a miss." : " It was a close call.") : ""}`}
                       </span>
                     </div>
                   </div>
