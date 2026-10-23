@@ -277,7 +277,7 @@
 
 
     const CATEGORY_LABEL = { pair: "Pairs", suited: "Suited", offsuit: "Offsuit" };
-    const ACTION_WORD = { R: "Raise", C: "Call", F: "Fold" };
+    const ACTION_WORD = { R: "Raise", C: "Check", F: "Fold" };
     const actionWord = (a, position) => (a === "C" && BANDS[position] && BANDS[position].check ? "Check" : ACTION_WORD[a]);
     const HISTORY_KEY = "poker-history-v2"; // bumped when ranges moved to percentile bands: old stats no longer apply
     const SETTINGS_KEY = "poker-ev-settings-v1";
@@ -725,7 +725,7 @@
         <button
           onClick={onClick}
           disabled={disabled}
-          className="flex-1 rounded-2xl py-4 flex flex-col items-center justify-center transition disabled:cursor-default"
+          className="chip-btn flex-1 rounded-2xl py-4 flex flex-col items-center justify-center transition disabled:cursor-default"
           style={{ background: bg, color: textColor, boxShadow: ring, opacity }}
         >
           <span className="text-base font-semibold">{label}</span>
@@ -1483,7 +1483,7 @@
           if (phase === "quiz") {
             if (!chosen) {
               if (k === "r") handleAnswer("R");
-              else if (k === "c") handleAnswer("C");
+              else if (k === "c" && currentHand.position === "BB") handleAnswer("C");
               else if (k === "f" && currentHand.position !== "BB") handleAnswer("F");
             } else if (k === "enter" || k === " " || k === "arrowright") {
               e.preventDefault();
@@ -1492,7 +1492,7 @@
           } else if (phase === "redemption") {
             if (!redemptionChosen) {
               if (k === "r") handleRedemptionAnswer("R");
-              else if (k === "c") handleRedemptionAnswer("C");
+              else if (k === "c" && currentRedemption.position === "BB") handleRedemptionAnswer("C");
               else if (k === "f" && currentRedemption.position !== "BB") handleRedemptionAnswer("F");
             } else if (k === "enter" || k === " " || k === "arrowright") {
               e.preventDefault();
@@ -1603,6 +1603,11 @@
             button:not(:disabled):hover { filter: brightness(1.08); }
             button:not(:disabled):active { transform: scale(0.97); }
             button:focus-visible { outline: 2px solid ${GOLD}; outline-offset: 2px; }
+            /* phones: big, square answer buttons */
+            @media (max-width: 640px) {
+              .chip-btn { aspect-ratio: 1 / 1; padding: 0; min-width: 0; border-radius: 1.5rem; }
+              .chip-btn > span:first-child { font-size: 1.5rem; line-height: 2rem; }
+            }
             .deal-in { animation: dealIn var(--dur-deal, 240ms) ease-out; }
             @keyframes dealIn {
               from { opacity: 0; transform: translateY(6px) scale(0.98); }
@@ -1926,8 +1931,9 @@
                         : "dim"
                     }
                   />
+                  {currentHand.position === "BB" && (
                   <ChipButton
-                    label={currentHand.position === "BB" ? "Check" : "Call"}
+                    label="Check"
                     bg={CALL_BG}
                     textColor={CALL_TEXT}
                     disabled={!!chosen}
@@ -1942,6 +1948,7 @@
                         : "dim"
                     }
                   />
+)}
                   {currentHand.position !== "BB" && (
 <ChipButton
                     label="Fold"
@@ -2092,8 +2099,9 @@
                         : "dim"
                     }
                   />
+                  {currentRedemption.position === "BB" && (
                   <ChipButton
-                    label={currentRedemption.position === "BB" ? "Check" : "Call"}
+                    label="Check"
                     bg={CALL_BG}
                     textColor={CALL_TEXT}
                     disabled={!!redemptionChosen}
@@ -2108,6 +2116,7 @@
                         : "dim"
                     }
                   />
+)}
                   {currentRedemption.position !== "BB" && (
 <ChipButton
                     label="Fold"
@@ -2354,7 +2363,7 @@
                   return (
                     <div className="flex gap-2 text-xs font-semibold">
                       <span className="flex-1 text-center rounded-full py-1" style={{ background: RAISE_BG, color: CREAM }}>Raise {c.R}</span>
-                      <span className="flex-1 text-center rounded-full py-1" style={{ background: CALL_BG, color: CALL_TEXT }}>{studyPos === "BB" ? "Check" : "Call"} {c.C}</span>
+                      {studyPos === "BB" && <span className="flex-1 text-center rounded-full py-1" style={{ background: CALL_BG, color: CALL_TEXT }}>Check {c.C}</span>}
                       {studyPos !== "BB" && <span className="flex-1 text-center rounded-full py-1" style={{ background: FOLD_BG, color: CREAM }}>Fold {c.F}</span>}
                     </div>
                   );
